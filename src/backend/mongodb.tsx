@@ -3,6 +3,8 @@ import { MongoClient, Db, Collection } from 'npm:mongodb@6.3.0';
 
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
+let connectionAttempts = 0;
+const MAX_CONNECTION_ATTEMPTS = 5;
 
 /**
  * Get MongoDB connection
@@ -13,28 +15,86 @@ export async function getMongoDb(): Promise<Db> {
     return cachedDb;
   }
 
-  // Hardcoded MongoDB connection string
-  const MONGODB_URI = 'mongodb+srv://crm_db_user:y7eShqCFNoyfSLPb@cluster0.vlklc6c.mongodb.net/btm_travel_crm?retryWrites=true&w=majority';
+  connectionAttempts++;
+  if (connectionAttempts > MAX_CONNECTION_ATTEMPTS) {
+    throw new Error(`MongoDB connection failed after ${MAX_CONNECTION_ATTEMPTS} attempts. Please check your connection string and network.`);
+  }
 
-  console.log('[MongoDB] Connecting to database...');
+  // Hardcoded MongoDB connection string with optimized timeouts
+  const MONGODB_URI = 'mongodb+srv://crm_db_user:y7eShqCFNoyfSLPb@cluster0.vlklc6c.mongodb.net/btm_travel_crm?retryWrites=true&w=majority&connectTimeoutMS=20000&serverSelectionTimeoutMS=20000';
 
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  
-  cachedClient = client;
-  cachedDb = client.db('btm_travel_crm');
+  console.log(`[MongoDB] Connecting to database (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})...`);
 
-  console.log('[MongoDB] ✅ Connected successfully');
+  try {
+    const client = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 20000, // 20 seconds
+      connectTimeoutMS: 20000,
+      socketTimeoutMS: 20000,
+      maxPoolSize: 10,
+      minPoolSize: 1, // Reduced from 2 to speed up initial connection
+      retryWrites: true,
+      retryReads: true,
+    });
+    
+    await client.connect();
+    
+    // Ping to verify connection
+    await client.db('admin').command({ ping: 1 });
+    
+    cachedClient = client;
+    cachedDb = client.db('btm_travel_crm');
+    connectionAttempts = 0; // Reset on successful connection
 
-  return cachedDb;
+    console.log('[MongoDB] ✅ Connected successfully and verified');
+
+    return cachedDb;
+  } catch (error) {
+    console.error(`[MongoDB] ❌ Connection failed (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}):`, error.message);
+    // Reset cache so next attempt will retry
+    cachedClient = null;
+    cachedDb = null;
+    
+    // Provide helpful error messages
+    if (error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo')) {
+      throw new Error('MongoDB DNS lookup failed. Check your internet connection and MongoDB cluster address.');
+    } else if (error.message?.includes('authentication')) {
+      throw new Error('MongoDB authentication failed. Check your username and password.');
+    } else if (error.message?.includes('timeout')) {
+      throw new Error('MongoDB connection timed out. The database may be slow to respond or your network connection may be unstable.');
+    }
+    
+    throw new Error(`MongoDB connection failed: ${error.message}`);
+  }
 }
 
 /**
- * Get a specific collection
+ * Get a specific collection with retry logic
  */
 export async function getCollection<T = any>(collectionName: string): Promise<Collection<T>> {
-  const db = await getMongoDb();
-  return db.collection<T>(collectionName);
+  let lastError: Error | null = null;
+  
+  // Try up to 3 times with exponential backoff
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const db = await getMongoDb();
+      return db.collection<T>(collectionName);
+    } catch (error) {
+      lastError = error;
+      console.error(`[MongoDB] Connection attempt ${attempt}/3 failed:`, error);
+      
+      if (attempt < 3) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
+        console.log(`[MongoDB] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Reset cache to force reconnection
+        cachedClient = null;
+        cachedDb = null;
+      }
+    }
+  }
+  
+  throw lastError || new Error('Failed to connect to MongoDB after 3 attempts');
 }
 
 /**
@@ -48,11 +108,14 @@ export const Collections = {
   PROMOTIONS: 'promotions',
   DAILY_PROGRESS: 'daily_progress',
   NUMBERS_DATABASE: 'numbers_database',
+  CUSTOMERS_DATABASE: 'customers_database',
   NUMBER_ASSIGNMENTS: 'number_assignments',
   CALL_LOGS: 'call_logs',
   ARCHIVE: 'archive',
   LOGIN_AUDIT: 'login_audit',
   GLOBAL_SETTINGS: 'global_settings',
+  NUMBER_CLAIMS: 'number_claims',
+  EMAIL_RECIPIENTS: 'email_recipients',
 } as const;
 
 /**

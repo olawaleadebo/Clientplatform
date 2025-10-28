@@ -1,0 +1,85 @@
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║               🚨 DO THIS RIGHT NOW 🚨                       ║
+║                                                              ║
+║  Your server is running OLD code (v3.0.0)                   ║
+║  The NEW code (v8.0.0) is in the file but NOT loaded        ║
+║  You MUST restart the server to load it                     ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━ WINDOWS USERS ━━━━━━━━━━━━━━━
+
+Open Command Prompt and run:
+
+    RESTART-BACKEND-NOW-SIMPLE.bat
+
+
+━━━━━━━━━━━━━━━ MAC/LINUX USERS ━━━━━━━━━━━━━━━
+
+Open Terminal and run:
+
+    chmod +x RESTART-BACKEND-NOW-SIMPLE.sh
+    ./RESTART-BACKEND-NOW-SIMPLE.sh
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+OR IF THAT DOESN'T WORK:
+
+1. Go to the terminal/window where your backend is running
+2. Press Ctrl+C to stop it
+3. Run this command:
+
+   cd backend
+   deno run --allow-net --allow-env --allow-read server.tsx
+
+4. Wait for this message:
+   🟢 VERSION: 8.0.0 - MANAGER ENDPOINTS ADDED! 🟢
+
+5. Wait 30 more seconds
+6. Go to your browser and refresh (F5)
+7. DONE! ✅
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+WHY THIS IS NECESSARY:
+
+File on disk:     server.tsx v8.0.0 ✅ (has endpoints)
+Server in memory: OLD v3.0.0 ❌ (missing endpoints)
+
+The server loads code into memory when it starts.
+When you update the file, the server doesn't reload automatically.
+You MUST restart it to load the new code.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+WHAT YOU'LL SEE WHEN IT WORKS:
+
+Server console:
+  🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+  🟢  VERSION: 8.0.0 - MANAGER ENDPOINTS ADDED! 🟢
+  🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+  
+  🔗 Manager Operations: ✅ ALL LOADED
+
+Browser console:
+  ✅ Backend Connected
+  ✅ Team data refreshed
+  ✅ No more 404 errors
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PLEASE DO THIS NOW!
+
+The fix is already done. You just need to restart the server.
+It will take 30 seconds total.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

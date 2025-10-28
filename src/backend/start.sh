@@ -1,10 +1,28 @@
 #!/bin/bash
 
-echo "🚀 Starting BTM Travel CRM Backend..."
-echo "📊 MongoDB: btm_travel_crm @ cluster0.vlklc6c.mongodb.net"
-echo "🌐 Server: http://localhost:8000"
+# BTM Travel CRM - Backend Server Startup Script
+# This script starts the Deno backend server with all required permissions
+
 echo ""
-echo "Press Ctrl+C to stop"
+echo "═══════════════════════════════════════════════════════════"
+echo "🚀 Starting BTM Travel CRM Backend Server v6.0.0"
+echo "═══════════════════════════════════════════════════════════"
+echo ""
+echo "✅ CORRECT SERVER: /backend/server.tsx"
+echo "❌ Do NOT use: /supabase/functions/server/index.tsx"
+echo ""
+echo "📍 Directory: $(pwd)"
+echo "📄 Running: server.tsx"
+echo "🔑 Permissions: --allow-all"
+echo "🌐 Port: 8000"
+echo ""
+echo "⚠️  IMPORTANT: Make sure NO other backend is running!"
+echo "   Kill old servers: pkill -f deno"
+echo ""
+echo "Press Ctrl+C to stop the server"
+echo ""
+echo "═══════════════════════════════════════════════════════════"
 echo ""
 
-deno run --allow-net --allow-env server.tsx
+# Start the server
+deno run --allow-all server.tsx

@@ -4,13 +4,11 @@ import { ClientCRM } from "./components/ClientCRM";
 import { PromoSales } from "./components/PromoSales";
 import { CustomerService } from "./components/CustomerService";
 import { AdminSettings } from "./components/AdminSettings";
-import { ManagerDashboard } from "./components/ManagerDashboard";
-import { DatabaseManager } from "./components/DatabaseManager";
-import { NumberBankManager } from "./components/NumberBankManager";
-import { ArchiveManager } from "./components/ArchiveManager";
+import { AgentPortal } from "./components/AgentPortal";
+import { ManagerPortal } from "./components/ManagerPortal";
 import { Help } from "./components/Help";
 import { Toaster } from "./components/ui/sonner";
-import { Phone, Tag, HeadphonesIcon, Sparkles, Settings, LogOut, User, BookOpen, Database, Users as UsersIcon, Archive } from "lucide-react";
+import { Phone, Tag, HeadphonesIcon, Sparkles, Settings, LogOut, User, BookOpen, Target } from "lucide-react";
 import { BTMTravelLogo } from "./components/BTMTravelLogo";
 import { UserProvider, useUser } from "./components/UserContext";
 import { ThreeCXProvider, useThreeCX } from "./components/ThreeCXContext";
@@ -18,9 +16,6 @@ import { ActiveCallPanel } from "./components/ActiveCallPanel";
 import { Login } from "./components/Login";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
-import { ServerHealthCheck } from "./components/ServerHealthCheck";
-import { DeploymentRequired } from "./components/DeploymentRequired";
-import { DemoModeBanner } from "./components/DemoModeBanner";
 import { useEffect } from "react";
 import { BACKEND_URL } from "./utils/config";
 
@@ -28,47 +23,84 @@ function AppContent() {
   const { currentUser, logout, isAdmin } = useUser();
   const { config } = useThreeCX();
   const [showHelp, setShowHelp] = useState(false);
-  const [showHealthCheck, setShowHealthCheck] = useState(true);
-  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
+  const [agentView, setAgentView] = useState<'portal' | 'classic'>('portal');
 
   const isManager = currentUser?.role === 'manager';
 
-  // Check server status on mount
+  // Check server status on mount and periodically
   useEffect(() => {
-    const checkServer = async () => {
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    
+    const checkServer = async (isRetry = false) => {
+      // Don't increment retry count on periodic checks
+      if (!isRetry) {
+        retryCount = 0;
+      }
+      
       try {
-        const response = await fetch(
-          `${BACKEND_URL}/health`,
-          {
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(5000) // 5 second timeout
-          }
-        );
+        console.log(`[App.tsx] Checking backend at: ${BACKEND_URL}/health (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        
+        // Simplified fetch - no timeout, let browser handle it
+        const response = await fetch(`${BACKEND_URL}/health`, {
+          method: 'GET',
+          cache: 'no-cache',
+        });
+        
+        console.log(`[App.tsx] ✅ Backend responded with status: ${response.status}`);
         
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'ok') {
-            setServerStatus('online');
+          console.log('[App.tsx] Backend data:', data);
+          
+          // Accept any of these as "connected"
+          if (data.status === 'ok' || 
+              data.mongodb === 'connected' || 
+              data.status === 'initializing' ||
+              data.status === 'degraded') {
             console.log('%c✅ Backend Connected ', 'background: #22c55e; color: white; font-size: 14px; padding: 5px 10px; border-radius: 4px;');
+            console.log('[App.tsx] MongoDB status:', data.mongodb);
+            setBackendConnected(true);
+            retryCount = 0; // Reset retry count on success
             return;
           }
         }
-        setServerStatus('offline');
-      } catch (error) {
-        // Backend offline - enter demo mode silently
-        setServerStatus('offline');
+        
+        // Response not OK or unexpected format - silently retry
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          setTimeout(() => checkServer(true), 2000);
+        } else {
+          setBackendConnected(false);
+        }
+      } catch (error: any) {
+        // Silently retry connection errors
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          setTimeout(() => checkServer(true), 2000);
+        } else {
+          // All retries failed - set disconnected state
+          setBackendConnected(false);
+        }
       }
     };
     
+    // Initial check
     checkServer();
+    
+    // Re-check every 15 seconds (give more time between checks)
+    const interval = setInterval(() => checkServer(false), 15000);
+    return () => clearInterval(interval);
   }, []);
-
-  // Demo mode activates automatically if server is offline
-  // A banner will show with instructions to start the backend
 
   // Show login page if not logged in
   if (!currentUser) {
-    return <Login />;
+    return (
+      <>
+        <Login />
+      </>
+    );
   }
 
   // Show Help page if requested
@@ -79,11 +111,12 @@ function AppContent() {
   // Admins see the Admin Settings panel directly
   if (isAdmin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
-        backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
-        WebkitBackgroundClip: 'padding-box',
-        backgroundClip: 'padding-box'
-      }}>
+      <>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
+          backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
+          WebkitBackgroundClip: 'padding-box',
+          backgroundClip: 'padding-box'
+        }}>
         {/* Header with gradient */}
         <div className="relative overflow-hidden border-b-2 border-white/30 bg-gradient-to-br from-violet-600 via-purple-600 to-blue-600" style={{
           backgroundImage: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #3b82f6 100%)',
@@ -172,37 +205,25 @@ function AppContent() {
         </div>
 
         <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-10">
-          {/* Demo Mode Banner - Shows when backend is offline */}
-          {serverStatus === 'offline' && (
-            <div className="mb-6">
-              <DemoModeBanner />
-            </div>
-          )}
-          
-          {/* Server Health Check */}
-          {showHealthCheck && serverStatus === 'online' && (
-            <div className="mb-6">
-              <ServerHealthCheck onDismiss={() => setShowHealthCheck(false)} />
-            </div>
-          )}
-          
           {/* Admin Settings - No Tabs, Just Direct Access */}
           <AdminSettings />
         </div>
 
         <Toaster />
       </div>
+      </>
     );
   }
 
   // Managers see the Team Performance Dashboard directly
   if (isManager) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
-        backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
-        WebkitBackgroundClip: 'padding-box',
-        backgroundClip: 'padding-box'
-      }}>
+      <>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
+          backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
+          WebkitBackgroundClip: 'padding-box',
+          backgroundClip: 'padding-box'
+        }}>
         {/* Header with gradient */}
         <div className="relative overflow-hidden border-b-2 border-white/30 bg-gradient-to-br from-violet-600 via-purple-600 to-blue-600" style={{
           backgroundImage: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #3b82f6 100%)',
@@ -240,9 +261,9 @@ function AppContent() {
                       BTMTravel CRM
                     </h1>
                     <p className="text-white/90 flex items-center gap-2 text-sm sm:text-lg" style={{ fontWeight: '500' }}>
-                      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span className="hidden sm:inline">Client Management & Sales Operations</span>
-                      <span className="sm:hidden">CRM Platform</span>
+                      <Target className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden sm:inline">Manager Portal - Team Oversight</span>
+                      <span className="sm:hidden">Manager Portal</span>
                     </p>
                   </div>
                 </div>
@@ -284,7 +305,7 @@ function AppContent() {
               </div>
 
               {/* Bottom Row - Help Button */}
-              <div className="flex justify-end">
+              <div className="flex justify-end items-center">
                 <Button
                   onClick={() => setShowHelp(true)}
                   variant="outline"
@@ -300,104 +321,24 @@ function AppContent() {
         </div>
 
         <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-10">
-          {/* Demo Mode Banner - Shows when backend is offline */}
-          {serverStatus === 'offline' && (
-            <div className="mb-6">
-              <DemoModeBanner />
-            </div>
-          )}
-          
-          {/* Server Health Check */}
-          {showHealthCheck && serverStatus === 'online' && (
-            <div className="mb-6">
-              <ServerHealthCheck onDismiss={() => setShowHealthCheck(false)} />
-            </div>
-          )}
-          
-          {/* Manager Portal Tabs */}
-          <Tabs defaultValue="dashboard" className="space-y-6 sm:space-y-8">
-            <TabsList className="grid w-full grid-cols-4 sm:w-[800px] h-12 sm:h-14 p-1 sm:p-1.5 bg-white border-2 border-gray-200 shadow-xl rounded-lg sm:rounded-xl">
-              <TabsTrigger 
-                value="dashboard" 
-                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-                style={{
-                  WebkitBackfaceVisibility: 'hidden',
-                  backfaceVisibility: 'hidden'
-                }}
-              >
-                <UsersIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Team Dashboard</span>
-                <span className="sm:hidden">Team</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="database" 
-                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-                style={{
-                  WebkitBackfaceVisibility: 'hidden',
-                  backfaceVisibility: 'hidden'
-                }}
-              >
-                <Database className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Database</span>
-                <span className="sm:hidden">Database</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="numberbank" 
-                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-                style={{
-                  WebkitBackfaceVisibility: 'hidden',
-                  backfaceVisibility: 'hidden'
-                }}
-              >
-                <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Number Bank</span>
-                <span className="sm:hidden">Numbers</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="archive" 
-                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-                style={{
-                  WebkitBackfaceVisibility: 'hidden',
-                  backfaceVisibility: 'hidden'
-                }}
-              >
-                <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Archive</span>
-                <span className="sm:hidden">Archive</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="dashboard" className="space-y-6">
-              <ManagerDashboard />
-            </TabsContent>
-
-            <TabsContent value="database" className="space-y-6">
-              <DatabaseManager />
-            </TabsContent>
-
-            <TabsContent value="numberbank" className="space-y-6">
-              <NumberBankManager />
-            </TabsContent>
-
-            <TabsContent value="archive" className="space-y-6">
-              <ArchiveManager />
-            </TabsContent>
-          </Tabs>
+          <ManagerPortal />
         </div>
 
         <ActiveCallPanel />
         <Toaster />
       </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
-      backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
-      WebkitBackgroundClip: 'padding-box',
-      backgroundClip: 'padding-box'
-    }}>
-      {/* Header with gradient */}
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50" style={{
+        backgroundImage: 'linear-gradient(to bottom right, #f8fafc, #dbeafe, #e9d5ff)',
+        WebkitBackgroundClip: 'padding-box',
+        backgroundClip: 'padding-box'
+      }}>
+        {/* Header with gradient */}
       <div className="relative overflow-hidden border-b-2 border-white/30 bg-gradient-to-br from-violet-600 via-purple-600 to-blue-600" style={{
         backgroundImage: 'linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #3b82f6 100%)',
         WebkitBackgroundClip: 'padding-box',
@@ -434,9 +375,19 @@ function AppContent() {
                     BTMTravel CRM
                   </h1>
                   <p className="text-white/90 flex items-center gap-2 text-sm sm:text-lg" style={{ fontWeight: '500' }}>
-                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                    <span className="hidden sm:inline">Client Management & Sales Operations</span>
-                    <span className="sm:hidden">CRM Platform</span>
+                    {agentView === 'portal' ? (
+                      <>
+                        <Target className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span className="hidden sm:inline">Agent Portal - Daily Call List</span>
+                        <span className="sm:hidden">Agent Portal</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span className="hidden sm:inline">Client Management & Sales Operations</span>
+                        <span className="sm:hidden">CRM Platform</span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -480,8 +431,32 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Bottom Row - Help Button (Visible to All) */}
-            <div className="flex justify-end">
+            {/* Bottom Row - View Toggle and Help Button */}
+            <div className="flex justify-between items-center">
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setAgentView('portal')}
+                  variant="outline"
+                  size="sm"
+                  className={`bg-white/10 backdrop-blur-xl border-white/20 text-white hover:bg-white/20 hover:text-white text-sm ${
+                    agentView === 'portal' ? 'bg-white/20 border-white/40' : ''
+                  }`}
+                >
+                  <Target className="w-4 h-4 mr-2" />
+                  <span>Agent Portal</span>
+                </Button>
+                <Button
+                  onClick={() => setAgentView('classic')}
+                  variant="outline"
+                  size="sm"
+                  className={`bg-white/10 backdrop-blur-xl border-white/20 text-white hover:bg-white/20 hover:text-white text-sm ${
+                    agentView === 'classic' ? 'bg-white/20 border-white/40' : ''
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  <span>Classic View</span>
+                </Button>
+              </div>
               <Button
                 onClick={() => setShowHelp(true)}
                 variant="outline"
@@ -497,77 +472,71 @@ function AppContent() {
       </div>
 
       <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-10">
-        {/* Demo Mode Banner - Shows when backend is offline */}
-        {serverStatus === 'offline' && (
-          <div className="mb-6">
-            <DemoModeBanner />
-          </div>
+        {/* Agent View Toggle */}
+        {agentView === 'portal' ? (
+          /* Agent Portal - Streamlined Call List Interface */
+          <AgentPortal />
+        ) : (
+          /* Classic View - Original Tabs Interface */
+          <Tabs defaultValue="client" className="space-y-6 sm:space-y-8">
+            <TabsList className="grid w-full grid-cols-3 sm:w-[600px] h-12 sm:h-14 p-1 sm:p-1.5 bg-white border-2 border-gray-200 shadow-xl rounded-lg sm:rounded-xl">
+              <TabsTrigger 
+                value="client" 
+                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
+                style={{
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden'
+                }}
+              >
+                <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Prospective Client</span>
+                <span className="sm:hidden">Prospect</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="promo" 
+                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
+                style={{
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden'
+                }}
+              >
+                <Tag className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Promo Sales</span>
+                <span className="sm:hidden">Promo</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="customer" 
+                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
+                style={{
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden'
+                }}
+              >
+                <HeadphonesIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Customer Service</span>
+                <span className="sm:hidden">Service</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="client" className="space-y-6">
+              <ClientCRM />
+            </TabsContent>
+
+            <TabsContent value="promo" className="space-y-6">
+              <PromoSales />
+            </TabsContent>
+
+            <TabsContent value="customer" className="space-y-6">
+              <CustomerService />
+            </TabsContent>
+          </Tabs>
         )}
-        
-        {/* Server Health Check */}
-        {showHealthCheck && serverStatus === 'online' && (
-          <div className="mb-6">
-            <ServerHealthCheck onDismiss={() => setShowHealthCheck(false)} />
-          </div>
-        )}
-        
-        <Tabs defaultValue="client" className="space-y-6 sm:space-y-8">
-          <TabsList className="grid w-full grid-cols-3 sm:w-[600px] h-12 sm:h-14 p-1 sm:p-1.5 bg-white border-2 border-gray-200 shadow-xl rounded-lg sm:rounded-xl">
-            <TabsTrigger 
-              value="client" 
-              className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-              style={{
-                WebkitBackfaceVisibility: 'hidden',
-                backfaceVisibility: 'hidden'
-              }}
-            >
-              <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Prospective Client</span>
-              <span className="sm:hidden">Prospect</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="promo" 
-              className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-              style={{
-                WebkitBackfaceVisibility: 'hidden',
-                backfaceVisibility: 'hidden'
-              }}
-            >
-              <Tag className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Promo Sales</span>
-              <span className="sm:hidden">Promo</span>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="customer" 
-              className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
-              style={{
-                WebkitBackfaceVisibility: 'hidden',
-                backfaceVisibility: 'hidden'
-              }}
-            >
-              <HeadphonesIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Customer Service</span>
-              <span className="sm:hidden">Service</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="client" className="space-y-6">
-            <ClientCRM />
-          </TabsContent>
-
-          <TabsContent value="promo" className="space-y-6">
-            <PromoSales />
-          </TabsContent>
-
-          <TabsContent value="customer" className="space-y-6">
-            <CustomerService />
-          </TabsContent>
-        </Tabs>
       </div>
 
       <ActiveCallPanel />
       <Toaster />
     </div>
+    </>
   );
 }
 

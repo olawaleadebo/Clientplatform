@@ -24,8 +24,8 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { toast } from "sonner@2.0.3";
 import { useUser } from "./UserContext";
 import { useThreeCX } from "./ThreeCXContext";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { DraggableDialog } from './DraggableDialog';
+import { backendService } from '../utils/backendService';
 
 interface Customer {
   id: string;
@@ -172,37 +172,11 @@ export function CustomerService() {
 
   // Fetch promotions, call script, and customers on mount
   useEffect(() => {
-    // Clear old hardcoded data on first load
-    const clearOldData = async () => {
-      try {
-        await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers/clear`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`,
-            },
-          }
-        );
-        console.log('[CUSTOMER SERVICE] Old customer data cleared');
-      } catch (error) {
-        console.error('[CUSTOMER SERVICE] Failed to clear old data:', error);
-      }
-    };
-
     const fetchPromotions = async () => {
       try {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions`,
-          {
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`,
-            },
-          }
-        );
+        const data = await backendService.getPromotions();
 
-        if (response.ok) {
-          const data = await response.json();
+        if (data.success) {
           // Filter for active promotions and sort by most recent
           const activePromos = (data.promotions || [])
             .filter((p: any) => p.status === 'active')
@@ -222,20 +196,10 @@ export function CustomerService() {
     const loadActiveScript = async () => {
       try {
         setIsLoadingScript(true);
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/call-scripts/active/existing`,
-          {
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`
-            }
-          }
-        );
+        const data = await backendService.getActiveCallScript('existing');
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.script) {
-            setCallScript(data.script);
-          }
+        if (data.success && data.script) {
+          setCallScript(data.script);
         }
       } catch (error) {
         console.error('[CUSTOMER SERVICE] Error loading existing client call script:', error);
@@ -255,24 +219,16 @@ export function CustomerService() {
         }
 
         // Fetch only customers assigned to this agent
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/customers/assigned/${currentUser.id}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`,
-            },
-          }
-        );
-
         console.log('[CUSTOMER SERVICE] Loading customers for agent:', currentUser.id, currentUser.name);
+        
+        const data = await backendService.getAssignedCustomers(currentUser.id);
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.records && data.records.length > 0) {
-            console.log(`[CUSTOMER SERVICE] ✅ Loaded ${data.records.length} assigned customers for agent ${currentUser.name}`);
+        if (data.success) {
+          if (data.customers && data.customers.length > 0) {
+            console.log(`[CUSTOMER SERVICE] ✅ Loaded ${data.customers.length} assigned customers for agent ${currentUser.name}`);
             
             // Transform database customers to CustomerService format
-            const transformedCustomers: Customer[] = data.records.map((record: any) => ({
+            const transformedCustomers: Customer[] = data.customers.map((record: any) => ({
               id: record.id || `customer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               name: record.name || 'Unknown',
               email: record.email || '',
@@ -312,17 +268,9 @@ export function CustomerService() {
 
     const loadArchivedCustomers = async () => {
       try {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers/archived`,
-          {
-            headers: {
-              'Authorization': `Bearer ${publicAnonKey}`
-            }
-          }
-        );
+        const data = await backendService.getArchivedCustomers();
 
-        if (response.ok) {
-          const data = await response.json();
+        if (data.success) {
           if (data.customers && Array.isArray(data.customers)) {
             // Ensure all archived customers have unique IDs
             const uniqueArchived = ensureUniqueIds(data.customers);
@@ -340,7 +288,6 @@ export function CustomerService() {
       }
     };
 
-    clearOldData();
     fetchPromotions();
     loadActiveScript();
     loadCustomers();
@@ -350,19 +297,10 @@ export function CustomerService() {
   // Function to save customers to backend (CustomerService storage)
   const saveCustomersToBackend = async (customersToSave: Customer[]) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ customers: customersToSave })
-        }
-      );
+      // Use backendService which now handles both single and bulk customers
+      const result = await backendService.addCustomer({ customers: customersToSave });
 
-      if (!response.ok) {
+      if (!result.success) {
         console.error('[CUSTOMER SERVICE] Failed to save customers to backend');
       } else {
         console.log('[CUSTOMER SERVICE] Customers saved successfully');
@@ -463,17 +401,10 @@ export function CustomerService() {
 
   const saveArchivedCustomersToBackend = async (archivedCustomersList: Customer[]) => {
     try {
-      await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers/archived`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({ customers: archivedCustomersList })
-        }
-      );
+      // Archive each customer individually
+      for (const customer of archivedCustomersList) {
+        await backendService.archiveCustomer(customer);
+      }
     } catch (error) {
       console.error('[CUSTOMER SERVICE] Error saving archived customers:', error);
     }
@@ -705,21 +636,10 @@ export function CustomerService() {
       };
 
       // Save interaction to backend
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customer-interactions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify(interaction)
-        }
-      );
+      const response = await backendService.logCustomerInteraction(selectedCustomer.id, interaction);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save interaction');
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to save interaction');
       }
 
       // Update customer's last contact and notes
@@ -910,25 +830,26 @@ export function CustomerService() {
     setIsSendingEmail(true);
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/send-quick-email`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            to: selectedCustomer.email,
-            subject: emailSubject,
-            message: emailMessage,
-            customerName: selectedCustomer.name,
-            from: 'customer-service'
-          })
-        }
-      );
+      // Create the HTML content for the email
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Dear ${selectedCustomer.name},</h2>
+          <div style="margin: 20px 0;">
+            ${emailMessage.replace(/\n/g, '<br>')}
+          </div>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+          <p style="color: #666; font-size: 12px;">
+            BTM Travel Customer Service<br>
+            From: customer-service
+          </p>
+        </div>
+      `;
 
-      const data = await response.json();
+      const data = await backendService.sendQuickEmail(
+        selectedCustomer.email,
+        emailSubject,
+        htmlContent
+      );
 
       if (data.success) {
         toast.success(`Email sent successfully to ${selectedCustomer.email}!`);
@@ -2267,7 +2188,7 @@ export function CustomerService() {
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>Click to call {customer.name}{config.enabled ? ' via 3CX' : ' (Demo mode)'}</p>
+                                <p>Click to call {customer.name}{config.enabled ? ' via 3CX' : ' (Simulation)'}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -2431,7 +2352,7 @@ export function CustomerService() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Call {selectedCustomer.name}{config.enabled ? ' via 3CX' : ' (Demo mode)'}</p>
+                        <p>Call {selectedCustomer.name}{config.enabled ? ' via 3CX' : ' (Simulation)'}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

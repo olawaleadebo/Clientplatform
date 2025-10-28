@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 import { toast } from 'sonner@2.0.3';
 
 interface NumberClaim {
@@ -22,21 +22,7 @@ export function useNumberClaims(userId: string, userName: string) {
   // Fetch all current claims
   const fetchClaims = useCallback(async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/number-claims`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch claims');
-      }
-
-      const data = await response.json();
+      const data = await backendService.getNumberClaims();
       if (data.success) {
         setClaims(data.claims || {});
       }
@@ -53,27 +39,9 @@ export function useNumberClaims(userId: string, userName: string) {
   // Claim a number
   const claimNumber = useCallback(async (phoneNumber: string, contactId?: string, type?: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/claim-number`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phoneNumber,
-            userId,
-            userName,
-            contactId,
-            type
-          }),
-        }
-      );
+      const data = await backendService.claimNumber(phoneNumber, userId, userName, contactId, type);
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      if (!data.success) {
         if (data.claimed) {
           toast.error(`Number already being called by ${data.claimedBy}`);
           return false;
@@ -81,13 +49,9 @@ export function useNumberClaims(userId: string, userName: string) {
         throw new Error(data.error || 'Failed to claim number');
       }
 
-      if (data.success) {
-        // Update local state
-        await fetchClaims();
-        return true;
-      }
-
-      return false;
+      // Update local state
+      await fetchClaims();
+      return true;
     } catch (error) {
       console.error('Error claiming number:', error);
       toast.error('Failed to claim number');
@@ -98,23 +62,8 @@ export function useNumberClaims(userId: string, userName: string) {
   // Release a number
   const releaseNumber = useCallback(async (phoneNumber: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/release-number`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phoneNumber,
-            userId
-          }),
-        }
-      );
-
-      const data = await response.json();
-
+      const data = await backendService.releaseNumber(phoneNumber, userId);
+      
       if (data.success) {
         // Update local state
         await fetchClaims();
@@ -154,23 +103,8 @@ export function useNumberClaims(userId: string, userName: string) {
   // Extend a claim
   const extendClaim = useCallback(async (phoneNumber: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/extend-number-claim`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phoneNumber,
-            userId
-          }),
-        }
-      );
-
-      const data = await response.json();
-
+      const data = await backendService.extendNumberClaim(phoneNumber, userId);
+      
       if (data.success) {
         await fetchClaims();
         return true;

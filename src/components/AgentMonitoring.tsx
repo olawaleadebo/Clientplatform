@@ -10,7 +10,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Eye, RefreshCw, Users, Phone, CheckCircle2, Clock, TrendingUp, Search, Filter, ArrowUpDown, Target, Activity, Zap } from 'lucide-react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 import { toast } from 'sonner@2.0.3';
 
 interface AgentStats {
@@ -63,21 +63,7 @@ export function AgentMonitoring() {
 
   const fetchAgents = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/agent-monitoring/overview`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch agents');
-      }
-
-      const data = await response.json();
+      const data = await backendService.getAgentMonitoringOverview();
       if (data.success) {
         setAgents(data.agents);
       }
@@ -95,21 +81,8 @@ export function AgentMonitoring() {
 
   const viewAgentPortal = async (agentId: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/agent-monitoring/agent/${agentId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch agent data');
-      }
-
-      const data = await response.json();
+      const data = await backendService.getAgentMonitoringDetails(agentId);
+      
       if (data.success) {
         setSelectedAgent(data);
         setViewDialogOpen(true);

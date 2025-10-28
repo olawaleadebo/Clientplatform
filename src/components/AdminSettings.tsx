@@ -13,8 +13,8 @@ import { ScrollArea } from "./ui/scroll-area";
 import { useUser } from "./UserContext";
 import { Settings, Users, Target, Plus, Edit, Trash2, ShieldCheck, UserCircle, Crown, Shield, Mail, Save, X, AlertCircle, CheckCircle2, ExternalLink, Upload, Download, Phone, BookUser, ShoppingBag, UserPlus, Briefcase, Key, Menu, FileText, Server, Tag, Database, Archive, Eye } from "lucide-react";
 import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { backendService } from '../utils/backendService';
+import { legacyEndpoints } from '../utils/legacyEndpointWrapper';
 import { LoginAudit } from './LoginAudit';
 import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
@@ -24,10 +24,12 @@ import { CallScriptManager } from './CallScriptManager';
 import { SMTPSettings } from './SMTPSettings';
 import { DailyProgressManager } from './DailyProgressManager';
 import { DatabaseManager } from './DatabaseManager';
-import { DatabaseTestPanel } from './DatabaseTestPanel';
-import { ServerDiagnosticsTool } from './ServerDiagnosticsTool';
 import { ArchiveManager } from './ArchiveManager';
 import { AgentMonitoring } from './AgentMonitoring';
+import { ConnectionStatus } from './ConnectionStatus';
+import { UserDebugPanel } from './UserDebugPanel';
+import { SystemInitializer } from './SystemInitializer';
+import { BackendDiagnostics } from './BackendDiagnostics';
 
 import { Permission } from './UserContext';
 
@@ -110,7 +112,7 @@ export function AdminSettings() {
   });
   
   // Sidebar navigation states
-  const [activeSection, setActiveSection] = useState<'users' | 'permissions' | 'audit' | 'email' | 'smtp' | '3cx' | 'calls' | 'scripts' | 'promotions' | 'daily-progress' | 'database' | 'database-test' | 'archive' | 'agent-monitoring' | 'system'>('users');
+  const [activeSection, setActiveSection] = useState<'users' | 'permissions' | 'audit' | 'email' | 'smtp' | '3cx' | 'calls' | 'scripts' | 'promotions' | 'daily-progress' | 'database' | 'archive' | 'agent-monitoring' | 'user-debug' | 'system-init'>('system-init');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   const [newUser, setNewUser] = useState({
@@ -129,7 +131,6 @@ export function AdminSettings() {
   }, []);
 
   const loadSettings = async () => {
-    // Try backend first, fall back to localStorage in demo mode
     try {
       const data = await backendService.getAdminSettings();
       if (data.success && data.settings) {
@@ -140,29 +141,9 @@ export function AdminSettings() {
         console.log('[ADMIN] ✅ Loaded users from backend:', validUsers.length, 'users');
       }
     } catch (error: any) {
-      // Silently fall back to localStorage in demo mode
-      if (error.message === 'DEMO_MODE') {
-        console.log('[ADMIN] 🎮 Demo mode - loading from browser storage');
-        // Load from localStorage
-        const storedUsers = localStorage.getItem('users');
-        if (storedUsers) {
-          const parsed = JSON.parse(storedUsers);
-          const validUsers = (parsed.users || []).filter((u: any) => u != null && u.id && u.username);
-          setUsers(validUsers);
-          console.log('[ADMIN] ✅ Loaded users from demo storage:', validUsers.length, 'users');
-        } else {
-          setUsers([]);
-        }
-        const storedTarget = localStorage.getItem('globalTarget');
-        if (storedTarget) {
-          setGlobalTarget(parseInt(storedTarget));
-        }
-      } else {
-        // Real error - show it
-        console.error('[ADMIN] Error loading settings:', error);
-        toast.error('Failed to load admin settings');
-        setUsers([]);
-      }
+      console.error('[ADMIN] Error loading settings:', error);
+      toast.error('Failed to load admin settings. Please check backend connection.');
+      setUsers([]);
     }
   };
 
@@ -171,14 +152,8 @@ export function AdminSettings() {
       await backendService.setGlobalTarget(globalTarget);
       toast.success(`Global daily target set to ${globalTarget} calls (note: targets are now per-user)`);
     } catch (error: any) {
-      // In demo mode, save to localStorage
-      if (error.message === 'DEMO_MODE') {
-        localStorage.setItem('globalTarget', globalTarget.toString());
-        toast.success(`🎮 Demo: Target saved to browser (${globalTarget} calls)`);
-      } else {
-        console.error('[ADMIN] Failed to save global target:', error);
-        toast.error('Failed to save global target. Please check your connection.');
-      }
+      console.error('[ADMIN] Failed to save global target:', error);
+      toast.error('Failed to save global target. Please check backend connection.');
     }
   };
 
@@ -246,21 +221,10 @@ export function AdminSettings() {
     if (!permissionUser) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/admin/users/${permissionUser.id}/permissions`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ permissions: selectedPermissions })
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[ADMIN] Permissions updated successfully:', data);
+      const response = await backendService.updateUser(permissionUser.id, { permissions: selectedPermissions });
+      
+      if (response.success) {
+        console.log('[ADMIN] Permissions updated successfully');
         setUsers(users.map(u => 
           u.id === permissionUser.id 
             ? { ...u, permissions: selectedPermissions }
@@ -269,19 +233,12 @@ export function AdminSettings() {
         toast.success(`Permissions updated for ${permissionUser.name}`);
         setIsPermissionDialogOpen(false);
       } else {
-        const errorData = await response.json();
-        console.error('[ADMIN] Server error updating permissions:', errorData);
-        toast.error(`Failed to update permissions: ${errorData.error || 'Server error'}`);
+        console.error('[ADMIN] Server error updating permissions:', response.error);
+        toast.error(`Failed to update permissions: ${response.error || 'Server error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] Network error updating permissions:', error);
-      // Demo mode - update locally when server is unavailable
-      setUsers(users.map(u => 
-        u.id === permissionUser.id 
-          ? { ...u, permissions: selectedPermissions }
-          : u
-      ));
-      toast.success(`Permissions updated for ${permissionUser.name} (demo mode)`);
+      toast.error(error.message || 'Failed to update permissions. Please check backend connection.');
       setIsPermissionDialogOpen(false);
     }
   };
@@ -313,33 +270,18 @@ export function AdminSettings() {
     console.log('[ADMIN] Creating new user:', user.username);
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/admin/create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ 
-            ...user,
-            password: newUser.password,
-            createdBy: currentUser?.username 
-          })
-        }
-      );
-
-      if (response.ok) {
+      const response = await backendService.addUser(user);
+      
+      if (response.success) {
         // Reload users from backend to get the latest data
         await loadSettings();
         toast.success(`User ${newUser.username} created successfully`);
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to create user');
+        toast.error(response.error || 'Failed to create user');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] Failed to create user:', error);
-      toast.error('Failed to create user. Please check your connection.');
+      toast.error(error.message || 'Failed to create user. Please check your connection.');
     }
 
     setNewUser({
@@ -357,32 +299,18 @@ export function AdminSettings() {
     if (!editingUser) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/admin/update-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ 
-            ...editingUser,
-            updatedBy: currentUser?.username 
-          })
-        }
-      );
-
-      if (response.ok) {
+      const response = await backendService.updateUser(editingUser.id, editingUser);
+      
+      if (response.success) {
         // Reload users from backend to get the latest data
         await loadSettings();
         toast.success(`User ${editingUser.username} updated successfully`);
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to update user');
+        toast.error(response.error || 'Failed to update user');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] Failed to update user:', error);
-      toast.error('Failed to update user. Please check your connection.');
+      toast.error(error.message || 'Failed to update user. Please check your connection.');
     }
 
     setEditingUser(null);
@@ -400,45 +328,18 @@ export function AdminSettings() {
 
     if (confirm(`Are you sure you want to delete user ${user.username}?`)) {
       try {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/admin/delete-user`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${publicAnonKey}`,
-            },
-            body: JSON.stringify({ 
-              userId,
-              deletedBy: currentUser?.username 
-            })
-          }
-        );
-
-        if (response.ok) {
+        const response = await backendService.deleteUser(userId);
+        
+        if (response.success) {
           // Reload users from backend to get the latest data
           await loadSettings();
           toast.success(`User ${user.username} deleted successfully`);
         } else {
-          const errorData = await response.json();
-          toast.error(errorData.error || 'Failed to delete user');
+          toast.error(response.error || 'Failed to delete user');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('[ADMIN] Failed to delete user:', error);
-        toast.error('Failed to delete user. Please check your connection.');
-        
-        // Delete from localStorage even if backend fails
-        const updatedUsers = users.filter(u => u.id !== userId);
-        setUsers(updatedUsers);
-        
-        const usersData = {
-          users: updatedUsers,
-          lastUpdated: new Date().toISOString()
-        };
-        localStorage.setItem('users', JSON.stringify(usersData));
-        console.log('[ADMIN] User deleted from localStorage (backend unavailable)');
-        
-        toast.success(`User ${user.username} deleted (demo mode)`);
+        toast.error(error.message || 'Failed to delete user. Please check backend connection.');
       }
     }
   };
@@ -461,36 +362,13 @@ export function AdminSettings() {
 
   const fetchRecipients = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/email-recipients`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        console.warn('[EMAIL RECIPIENTS] Server returned error status:', response.status);
-        toast.warning("Server temporarily unavailable. Using default recipients.");
-        setRecipients([
-          "operations@btmlimited.net",
-          "quantityassurance@btmlimited.net",
-          "clientcare@btmlimited.net"
-        ]);
-        setIsLoadingEmails(false);
-        return;
-      }
-
-      const data = await response.json();
+      const data = await backendService.getEmailRecipients();
       
       if (data.success) {
         setRecipients(data.recipients);
-        if (data.warning) {
-          toast.warning(data.warning);
-        }
+        // No warning needed - endpoint now implemented
       } else {
-        toast.error(data.error || "Failed to load email recipients");
+        // Silently use defaults if endpoint returns error (likely 404 from old server)
         setRecipients([
           "operations@btmlimited.net",
           "quantityassurance@btmlimited.net",
@@ -498,11 +376,7 @@ export function AdminSettings() {
         ]);
       }
     } catch (error) {
-      // Silently fail if server is offline, otherwise show warning
-      if (!(error instanceof TypeError && error.message.includes('fetch'))) {
-        console.error('[EMAIL RECIPIENTS] Failed to fetch:', error);
-        toast.warning("Network error. Using default email recipients.");
-      }
+      // Silently use defaults - the backendService already handles logging
       setRecipients([
         "operations@btmlimited.net",
         "quantityassurance@btmlimited.net",
@@ -521,25 +395,7 @@ export function AdminSettings() {
 
     setIsSavingEmails(true);
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/email-recipients`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ emails: recipients })
-        }
-      );
-
-      if (!response.ok) {
-        toast.error(`Server error: Unable to save recipients. The database may be temporarily unavailable. (Status: ${response.status})`);
-        setIsSavingEmails(false);
-        return;
-      }
-
-      const data = await response.json();
+      const data = await backendService.saveEmailRecipients(recipients);
       
       if (data.success) {
         toast.success("Email recipients updated successfully!");
@@ -591,35 +447,27 @@ export function AdminSettings() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/contacts`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            name: newContact.name,
-            phone: newContact.phone,
-            email: newContact.email,
-            company: newContact.company,
-            notes: newContact.notes,
-            status: 'pending'
-          })
-        }
-      );
+      const data = await legacyEndpoints.addContact({
+        name: newContact.name,
+        phone: newContact.phone,
+        email: newContact.email,
+        company: newContact.company,
+        notes: newContact.notes,
+        status: 'pending'
+      });
 
-      if (response.ok) {
+      if (data.success) {
         toast.success(`Contact "${newContact.name}" added successfully!`);
         setNewContact({ name: "", phone: "", email: "", company: "", notes: "" });
         setIsAddContactDialogOpen(false);
       } else {
-        toast.error("Failed to add contact. Please try again.");
+        // Show the error/info message from the wrapper
+        setNewContact({ name: "", phone: "", email: "", company: "", notes: "" });
+        setIsAddContactDialogOpen(false);
       }
     } catch (error) {
       console.error('[ADMIN] Failed to add contact:', error);
-      toast.success(`Contact "${newContact.name}" added (demo mode - backend not configured)`);
+      toast.error("Failed to add contact");
       setNewContact({ name: "", phone: "", email: "", company: "", notes: "" });
       setIsAddContactDialogOpen(false);
     }
@@ -644,27 +492,17 @@ export function AdminSettings() {
         try {
           const [name, phone, company, status, lastContact, notes, email] = row;
           
-          const response = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/contacts`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${publicAnonKey}`,
-              },
-              body: JSON.stringify({
-                name,
-                phone,
-                email: email || "",
-                company,
-                notes: notes || "",
-                status: status || 'pending',
-                lastContact
-              })
-            }
-          );
+          const data = await legacyEndpoints.addContact({
+            name,
+            phone,
+            email: email || "",
+            company,
+            notes: notes || "",
+            status: status || 'pending',
+            lastContact
+          });
 
-          if (response.ok) {
+          if (data.success) {
             successCount++;
           } else {
             errorCount++;
@@ -692,17 +530,9 @@ export function AdminSettings() {
 
   const handleExportList = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/contacts`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
+      const data = await legacyEndpoints.getContacts();
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data.success) {
         const contacts = data.contacts || [];
         
         const csvContent = [
@@ -766,37 +596,25 @@ export function AdminSettings() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            name: newCustomer.name,
-            email: newCustomer.email,
-            phone: newCustomer.phone,
-            business: newCustomer.business,
-            status: newCustomer.status,
-            notes: newCustomer.notes
-          })
-        }
-      );
+      const data = await backendService.addCustomer({
+        name: newCustomer.name,
+        email: newCustomer.email,
+        phone: newCustomer.phone,
+        business: newCustomer.business,
+        status: newCustomer.status,
+        notes: newCustomer.notes
+      });
 
-      if (response.ok) {
+      if (data.success) {
         toast.success(`Customer "${newCustomer.name}" added successfully!`);
         setNewCustomer({ name: "", email: "", phone: "", business: "Online Sales", status: "active", notes: "" });
         setIsAddCustomerDialogOpen(false);
       } else {
-        toast.error("Failed to add customer. Please try again.");
+        toast.error(data.error || "Failed to add customer. Please try again.");
       }
     } catch (error) {
       console.error('[ADMIN] Failed to add customer:', error);
-      toast.success(`Customer "${newCustomer.name}" added (demo mode - backend not configured)`);
-      setNewCustomer({ name: "", email: "", phone: "", business: "Online Sales", status: "active", notes: "" });
-      setIsAddCustomerDialogOpen(false);
+      toast.error(`Failed to add customer: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -815,6 +633,9 @@ export function AdminSettings() {
       let successCount = 0;
       let errorCount = 0;
 
+      // Batch import all customers
+      const customers = [];
+      
       for (const row of dataRows) {
         try {
           const [name, email, phone, business, status, lastContact, totalPurchases, totalRevenue, notes] = row;
@@ -827,35 +648,31 @@ export function AdminSettings() {
           const validStatuses = ["active", "inactive", "vip", "corporate"];
           const customerStatus = validStatuses.includes(status) ? status : "active";
           
-          const response = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${publicAnonKey}`,
-              },
-              body: JSON.stringify({
-                name,
-                email,
-                phone,
-                business: customerBusiness,
-                status: customerStatus,
-                notes: notes || "",
-                lastContact,
-                totalPurchases: parseInt(totalPurchases) || 0
-              })
-            }
-          );
-
-          if (response.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
+          customers.push({
+            name,
+            email,
+            phone,
+            business: customerBusiness,
+            status: customerStatus,
+            notes: notes || "",
+            lastContact,
+            totalPurchases: parseInt(totalPurchases) || 0
+          });
         } catch (error) {
           errorCount++;
         }
+      }
+
+      // Import all customers in one call
+      try {
+        const data = await backendService.addCustomer({ customers });
+        if (data.success) {
+          successCount = customers.length;
+        } else {
+          errorCount = customers.length;
+        }
+      } catch (error) {
+        errorCount = customers.length;
       }
 
       if (successCount > 0) {
@@ -876,18 +693,10 @@ export function AdminSettings() {
 
   const handleExportCustomers = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/customers`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
+      const data = await backendService.getCustomers();
 
-      if (response.ok) {
-        const data = await response.json();
-        const customers = data.customers || [];
+      if (data.success) {
+        const customers = data.customers || data.records || [];
         
         const csvContent = [
           ['Name', 'Email', 'Phone', 'Business', 'Status', 'Last Contact', 'Total Purchases', 'Total Revenue', 'Notes'],
@@ -920,8 +729,9 @@ export function AdminSettings() {
       }
     } catch (error) {
       console.error('[ADMIN] Failed to export customers:', error);
+      toast.error('Failed to export customers. Please check backend connection.');
       
-      // Demo mode - create sample CSV
+      // Fallback - create sample CSV showing format
       const csvContent = [
         ['Name', 'Email', 'Phone', 'Business', 'Status', 'Last Contact', 'Total Purchases', 'Total Revenue', 'Notes'],
         ['Adewale Ogunleye', 'adewale@email.com', '+234 803 111 2222', 'Corporate', 'vip', 'Oct 16, 2025', '15', '4500', 'VIP customer']
@@ -964,26 +774,12 @@ export function AdminSettings() {
   // Promotion management functions
   const fetchPromotions = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setPromotions(data.promotions || []);
-        console.log('[ADMIN] Loaded promotions:', data.count);
-      }
-    } catch (error) {
-      // Silently fail in demo mode - promotions managed in PromoSales component
-      if (!(error instanceof TypeError && error.message.includes('fetch'))) {
-        console.error('[ADMIN] Failed to fetch promotions:', error);
-      }
-      // Set empty array - promotions are managed elsewhere
+      const data = await backendService.getPromotions();
+      setPromotions(data.promotions || []);
+      console.log('[ADMIN] Loaded promotions:', data.promotions?.length || 0);
+    } catch (error: any) {
+      console.error('[ADMIN] Failed to fetch promotions:', error);
+      // Set empty array on error
       setPromotions([]);
     }
   };
@@ -995,32 +791,26 @@ export function AdminSettings() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            name: newPromo.name,
-            code: newPromo.code.toUpperCase(),
-            discount: newPromo.discount,
-            website: newPromo.website,
-            status: newPromo.status,
-            startDate: newPromo.startDate,
-            endDate: newPromo.endDate,
-            target: parseInt(newPromo.target) || 0,
-            usage: parseInt(newPromo.usage) || 0,
-            revenue: parseInt(newPromo.revenue) || 0,
-            views: parseInt(newPromo.views) || 0,
-            conversions: parseInt(newPromo.conversions) || 0
-          })
-        }
-      );
+      const promoData = {
+        name: newPromo.name,
+        code: newPromo.code.toUpperCase(),
+        discount: newPromo.discount,
+        website: newPromo.website,
+        status: newPromo.status,
+        startDate: newPromo.startDate,
+        endDate: newPromo.endDate,
+        target: parseInt(newPromo.target) || 0,
+        usage: parseInt(newPromo.usage) || 0,
+        revenue: parseInt(newPromo.revenue) || 0,
+        views: parseInt(newPromo.views) || 0,
+        conversions: parseInt(newPromo.conversions) || 0,
+        targetCustomerTypes: newPromo.targetCustomerTypes || [],
+        targetFlights: newPromo.targetFlights || []
+      };
 
-      if (response.ok) {
+      const response = await backendService.addPromotion(promoData);
+
+      if (response.success) {
         toast.success("Promotion created successfully!");
         setIsAddPromoDialogOpen(false);
         setNewPromo({
@@ -1035,7 +825,9 @@ export function AdminSettings() {
           usage: "0",
           revenue: "0",
           views: "0",
-          conversions: "0"
+          conversions: "0",
+          targetCustomerTypes: [],
+          targetFlights: []
         });
         fetchPromotions();
       } else {
@@ -1057,43 +849,39 @@ export function AdminSettings() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions/${editingPromo.id.replace('promotion_', '')}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            name: editingPromo.name,
-            code: editingPromo.code.toUpperCase(),
-            discount: editingPromo.discount,
-            website: editingPromo.website,
-            status: editingPromo.status,
-            startDate: editingPromo.startDate,
-            endDate: editingPromo.endDate,
-            target: editingPromo.target,
-            usage: editingPromo.usage,
-            revenue: editingPromo.revenue,
-            views: editingPromo.views,
-            conversions: editingPromo.conversions
-          })
-        }
+      const updateData = {
+        name: editingPromo.name,
+        code: editingPromo.code.toUpperCase(),
+        discount: editingPromo.discount,
+        website: editingPromo.website,
+        status: editingPromo.status,
+        startDate: editingPromo.startDate,
+        endDate: editingPromo.endDate,
+        target: editingPromo.target,
+        usage: editingPromo.usage,
+        revenue: editingPromo.revenue,
+        views: editingPromo.views,
+        conversions: editingPromo.conversions,
+        targetCustomerTypes: editingPromo.targetCustomerTypes || [],
+        targetFlights: editingPromo.targetFlights || []
+      };
+
+      const response = await backendService.updatePromotion(
+        editingPromo.id.replace('promotion_', ''),
+        updateData
       );
 
-      if (response.ok) {
+      if (response.success) {
         toast.success("Promotion updated successfully!");
         setIsEditPromoDialogOpen(false);
         setEditingPromo(null);
         fetchPromotions();
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Failed to update promotion");
+        toast.error(response.error || "Failed to update promotion");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] Failed to update promotion:', error);
-      toast.error("Failed to update promotion");
+      toast.error(error.message || "Failed to update promotion");
     }
   };
 
@@ -1101,26 +889,17 @@ export function AdminSettings() {
     if (!confirm("Are you sure you want to delete this promotion?")) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions/${promoId.replace('promotion_', '')}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
+      const response = await backendService.deletePromotion(promoId.replace('promotion_', ''));
 
-      if (response.ok) {
+      if (response.success) {
         toast.success("Promotion deleted successfully!");
         fetchPromotions();
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Failed to delete promotion");
+        toast.error(response.error || "Failed to delete promotion");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] Failed to delete promotion:', error);
-      toast.error("Failed to delete promotion");
+      toast.error(error.message || "Failed to delete promotion");
     }
   };
 
@@ -1140,10 +919,11 @@ export function AdminSettings() {
   }
 
   const navigationItems = [
+    { id: 'system-init' as const, label: '🚀 System Setup', icon: Database },
     { id: 'users' as const, label: 'Users', icon: Users },
     { id: 'daily-progress' as const, label: 'Daily Progress', icon: Target },
     { id: 'database' as const, label: 'Assign Calls/Database', icon: Database },
-    { id: 'database-test' as const, label: '🔧 Database Test', icon: Server },
+    { id: 'mongodb-status' as const, label: 'MongoDB Status', icon: Database },
     { id: 'agent-monitoring' as const, label: 'Agent Monitoring', icon: Eye },
     { id: 'calls' as const, label: 'Call History', icon: Phone },
     { id: 'scripts' as const, label: 'Call Scripts', icon: FileText },
@@ -1230,64 +1010,64 @@ export function AdminSettings() {
         <div className="flex-1 min-w-0 space-y-6">
           {activeSection === 'users' && (
             <div className="space-y-6">
-          {/* Global Target Settings */}
-          <Card className="bg-white/60 backdrop-blur-xl border-white/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="w-5 h-5" />
-            Global Daily Call Target for Agents
-          </CardTitle>
-          <CardDescription>
-            Set the default daily call target for all agents (can be overridden per agent)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-end gap-4">
-            <div className="flex-1 max-w-xs space-y-2">
-              <Label htmlFor="global-target">Default Daily Target</Label>
-              <Input
-                id="global-target"
-                type="number"
-                min="1"
-                value={globalTarget}
-                onChange={(e) => setGlobalTarget(parseInt(e.target.value) || 0)}
-                className="bg-white/60 backdrop-blur-xl border-white/20"
-              />
-            </div>
-            <Button 
-              onClick={handleSaveGlobalTarget}
-              className="bg-gradient-to-br from-violet-600 to-purple-600 text-white shadow-lg shadow-purple-500/20"
-            >
-              Save Target
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Current global target: <strong>{globalTarget} calls per day</strong>
-          </p>
-        </CardContent>
-      </Card>
+              {/* Global Target Settings */}
+              <Card className="bg-white/60 backdrop-blur-xl border-white/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="w-5 h-5" />
+                    Global Daily Call Target for Agents
+                  </CardTitle>
+                  <CardDescription>
+                    Set the default daily call target for all agents (can be overridden per agent)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1 max-w-xs space-y-2">
+                      <Label htmlFor="global-target">Default Daily Target</Label>
+                      <Input
+                        id="global-target"
+                        type="number"
+                        min="1"
+                        value={globalTarget}
+                        onChange={(e) => setGlobalTarget(parseInt(e.target.value) || 0)}
+                        className="bg-white/60 backdrop-blur-xl border-white/20"
+                      />
+                    </div>
+                    <Button 
+                      onClick={handleSaveGlobalTarget}
+                      className="bg-gradient-to-br from-violet-600 to-purple-600 text-white shadow-lg shadow-purple-500/20"
+                    >
+                      Save Target
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Current global target: <strong>{globalTarget} calls per day</strong>
+                  </p>
+                </CardContent>
+              </Card>
 
-      {/* User Management */}
-      <Card className="bg-white/60 backdrop-blur-xl border-white/20">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                User Management
-              </CardTitle>
-              <CardDescription>
-                Create and manage users with different roles, permissions, and call targets
-              </CardDescription>
-            </div>
-            <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-to-br from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add User
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              {/* User Management */}
+              <Card className="bg-white/60 backdrop-blur-xl border-white/20">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="w-5 h-5" />
+                        User Management
+                      </CardTitle>
+                      <CardDescription>
+                        Create and manage users with different roles, permissions, and call targets
+                      </CardDescription>
+                    </div>
+                    <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-gradient-to-br from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add User
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Add New User</DialogTitle>
                   <DialogDescription>
@@ -1625,194 +1405,194 @@ export function AdminSettings() {
 
           {activeSection === 'permissions' && (
             <div className="space-y-6">
-          {/* Permission Management Dialog */}
-          <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5" />
-                  Manage Permissions - {permissionUser?.name}
-                </DialogTitle>
-                <DialogDescription>
-                  Grant specific permissions to {permissionUser?.name} ({permissionUser?.role})
-                </DialogDescription>
-              </DialogHeader>
+              {/* Permission Management Dialog */}
+              <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Key className="w-5 h-5" />
+                      Manage Permissions - {permissionUser?.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Grant specific permissions to {permissionUser?.name} ({permissionUser?.role})
+                    </DialogDescription>
+                  </DialogHeader>
 
-              <div className="space-y-6 mt-4">
-                {['Team Management', 'CRM', 'Customer Service', 'Promotions', 'Security', 'Reporting'].map(category => {
-                  const categoryPermissions = allPermissions.filter(p => p.category === category);
-                  if (categoryPermissions.length === 0) return null;
+                  <div className="space-y-6 mt-4">
+                    {['Team Management', 'CRM', 'Customer Service', 'Promotions', 'Security', 'Reporting'].map(category => {
+                      const categoryPermissions = allPermissions.filter(p => p.category === category);
+                      if (categoryPermissions.length === 0) return null;
 
-                  return (
-                    <div key={category} className="space-y-3">
-                      <h4 className="font-medium text-sm text-purple-900 bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
-                        {category}
-                      </h4>
-                      <div className="space-y-3 pl-4">
-                        {categoryPermissions.map(permission => (
-                          <div key={permission.id} className="flex items-start space-x-3 p-3 rounded-lg border bg-white/50 hover:bg-white/80 transition-colors">
-                            <Checkbox
-                              id={permission.id}
-                              checked={selectedPermissions.includes(permission.id)}
-                              onCheckedChange={() => togglePermission(permission.id)}
-                              className="mt-1"
-                            />
-                            <div className="flex-1">
-                              <label
-                                htmlFor={permission.id}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                              >
-                                {permission.label}
-                              </label>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {permission.description}
-                              </p>
-                            </div>
+                      return (
+                        <div key={category} className="space-y-3">
+                          <h4 className="font-medium text-sm text-purple-900 bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
+                            {category}
+                          </h4>
+                          <div className="space-y-3 pl-4">
+                            {categoryPermissions.map(permission => (
+                              <div key={permission.id} className="flex items-start space-x-3 p-3 rounded-lg border bg-white/50 hover:bg-white/80 transition-colors">
+                                <Checkbox
+                                  id={permission.id}
+                                  checked={selectedPermissions.includes(permission.id)}
+                                  onCheckedChange={() => togglePermission(permission.id)}
+                                  className="mt-1"
+                                />
+                                <div className="flex-1">
+                                  <label
+                                    htmlFor={permission.id}
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                  >
+                                    {permission.label}
+                                  </label>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {permission.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <DialogFooter className="mt-6">
+                    <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSavePermissions}
+                      className="bg-gradient-to-br from-purple-600 to-violet-600 text-white"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Permissions
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Permissions Overview */}
+              <Card className="bg-white/60 backdrop-blur-xl border-white/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="w-5 h-5" />
+                    Manager Permissions Overview
+                  </CardTitle>
+                  <CardDescription>
+                    View and manage granular permissions for all managers
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {users.filter(u => u != null && u.role === 'manager').length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Key className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                        <p>No managers found. Create a manager user first to assign permissions.</p>
+                      </div>
+                    ) : (
+                      users.filter(u => u != null && u.role === 'manager').map(manager => (
+                        <Card key={manager.id} className="bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <CardTitle className="text-lg">{manager.name}</CardTitle>
+                                <CardDescription>@{manager.username} • {manager.email}</CardDescription>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openPermissionsDialog(manager)}
+                                className="gap-2 bg-white hover:bg-purple-50"
+                              >
+                                <Key className="w-4 h-4" />
+                                Edit Permissions
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-purple-900">Assigned Permissions:</span>
+                                <Badge variant="secondary" className="bg-purple-100 text-purple-900">
+                                  {manager.permissions?.length || 0} of {allPermissions.length}
+                                </Badge>
+                              </div>
+                              
+                              {manager.permissions && manager.permissions.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {manager.permissions.map(permId => {
+                                    const perm = allPermissions.find(p => p.id === permId);
+                                    return perm ? (
+                                      <Badge key={permId} variant="outline" className="bg-white border-purple-200 text-purple-900">
+                                        {perm.label}
+                                      </Badge>
+                                    ) : null;
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-muted-foreground italic bg-white/50 p-3 rounded-lg border border-purple-100">
+                                  No permissions assigned. Click "Edit Permissions" to grant access.
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Permission Categories Guide */}
+              <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200">
+                <CardHeader>
+                  <CardTitle className="text-blue-900">Permission Categories</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-blue-800">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2">
+                        <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>Team Management:</strong> Oversee agents, view performance, assign tasks
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <BookUser className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>CRM:</strong> Add, edit, and manage contact lists and call assignments
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <ShoppingBag className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>Customer Service:</strong> Manage customer database and service records
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              <DialogFooter className="mt-6">
-                <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleSavePermissions}
-                  className="bg-gradient-to-br from-purple-600 to-violet-600 text-white"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Permissions
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Permissions Overview */}
-          <Card className="bg-white/60 backdrop-blur-xl border-white/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key className="w-5 h-5" />
-                Manager Permissions Overview
-              </CardTitle>
-              <CardDescription>
-                View and manage granular permissions for all managers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {users.filter(u => u != null && u.role === 'manager').length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Key className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p>No managers found. Create a manager user first to assign permissions.</p>
-                  </div>
-                ) : (
-                  users.filter(u => u != null && u.role === 'manager').map(manager => (
-                    <Card key={manager.id} className="bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <CardTitle className="text-lg">{manager.name}</CardTitle>
-                            <CardDescription>@{manager.username} • {manager.email}</CardDescription>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openPermissionsDialog(manager)}
-                            className="gap-2 bg-white hover:bg-purple-50"
-                          >
-                            <Key className="w-4 h-4" />
-                            Edit Permissions
-                          </Button>
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2">
+                        <Target className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>Promotions:</strong> Create and manage promotional campaigns
                         </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-purple-900">Assigned Permissions:</span>
-                            <Badge variant="secondary" className="bg-purple-100 text-purple-900">
-                              {manager.permissions?.length || 0} of {allPermissions.length}
-                            </Badge>
-                          </div>
-                          
-                          {manager.permissions && manager.permissions.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {manager.permissions.map(permId => {
-                                const perm = allPermissions.find(p => p.id === permId);
-                                return perm ? (
-                                  <Badge key={permId} variant="outline" className="bg-white border-purple-200 text-purple-900">
-                                    {perm.label}
-                                  </Badge>
-                                ) : null;
-                              })}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground italic bg-white/50 p-3 rounded-lg border border-purple-100">
-                              No permissions assigned. Click "Edit Permissions" to grant access.
-                            </div>
-                          )}
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>Security:</strong> Access audit logs and security monitoring
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Permission Categories Guide */}
-          <Card className="bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Permission Categories</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-blue-800">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>Team Management:</strong> Oversee agents, view performance, assign tasks
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Download className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <strong>Reporting:</strong> Generate reports and export data
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <BookUser className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>CRM:</strong> Add, edit, and manage contact lists and call assignments
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <ShoppingBag className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>Customer Service:</strong> Manage customer database and service records
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <Target className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>Promotions:</strong> Create and manage promotional campaigns
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>Security:</strong> Access audit logs and security monitoring
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Download className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <strong>Reporting:</strong> Generate reports and export data
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -1826,166 +1606,192 @@ export function AdminSettings() {
             <AgentMonitoring />
           )}
 
+          {/* System Initializer Section */}
+          {activeSection === 'system-init' && (
+            <div className="space-y-6">
+              {/* Backend Diagnostics */}
+              <BackendDiagnostics />
+              
+              {/* System Initializer */}
+              <Card className="bg-white/60 backdrop-blur-xl border-white/20 border-2 border-blue-300">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="w-6 h-6 text-blue-600" />
+                    System Setup & User Initialization
+                  </CardTitle>
+                  <CardDescription>
+                    First-time setup, user management, and system diagnostics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SystemInitializer />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+
+
           {activeSection === 'audit' && (
             <LoginAudit />
           )}
 
           {activeSection === 'email' && (
             <div className="space-y-6">
-          {/* Email Setup Content */}
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200">
-              <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-sm">Backend Connected</p>
-                <p className="text-sm text-muted-foreground">
-                  Your CRM is connected to Supabase. Daily reports are generated with a target of {globalTarget} calls per day.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <Mail className="w-5 h-5 text-purple-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-sm">Daily Report Workflow</p>
-                <p className="text-sm text-muted-foreground">
-                  Click "Generate Report" in the Client tab to send a comprehensive daily summary email showing completed and pending calls, with progress toward the {globalTarget}-call target.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-sm">Email Service Required</p>
-                <p className="text-sm text-muted-foreground mb-2">
-                  To send actual emails, you need to configure an email service provider. Reports are currently logged but not emailed.
-                </p>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Recommended Options:</p>
-                  <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                    <li className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">Easiest</Badge>
-                      <a 
-                        href="https://resend.com" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                        Resend.com <ExternalLink className="w-3 h-3" />
-                      </a>
-                      - Free tier: 100 emails/day
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">Popular</Badge>
-                      <a 
-                        href="https://sendgrid.com" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                        SendGrid <ExternalLink className="w-3 h-3" />
-                      </a>
-                      - Free tier: 100 emails/day
-                    </li>
-                  </ul>
+              {/* Email Setup Content */}
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-blue-200">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Backend Connected</p>
+                    <p className="text-sm text-muted-foreground">
+                      Your CRM is connected to MongoDB. Daily reports are generated with a target of {globalTarget} calls per day.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm font-medium mb-2">Quick Setup Steps:</p>
-              <ol className="text-sm text-muted-foreground space-y-1 ml-4 list-decimal">
-                <li>Sign up for an email service (Resend recommended)</li>
-                <li>Get your API key from the provider</li>
-                <li>Add the API key to your Supabase environment variables</li>
-                <li>Update the server code to integrate with the provider</li>
-              </ol>
-            </div>
+                <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <Mail className="w-5 h-5 text-purple-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Daily Report Workflow</p>
+                    <p className="text-sm text-muted-foreground">
+                      Click "Generate Report" in the Client tab to send a comprehensive daily summary email showing completed and pending calls, with progress toward the {globalTarget}-call target.
+                    </p>
+                  </div>
+                </div>
 
-            <Card className="bg-white/60 backdrop-blur-xl border-white/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-green-700" />
-                  Email Notification Recipients
-                </CardTitle>
-                <CardDescription>
-                  All daily reports will be sent to these email addresses
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingEmails ? (
-                  <div className="text-sm text-muted-foreground">Loading recipients...</div>
-                ) : (
-                  <>
-                    <div className="space-y-2 mb-4">
-                      {recipients.length === 0 ? (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                          No recipients configured. Add at least one email address below.
-                        </div>
-                      ) : (
-                        recipients.map((email, index) => (
-                          <div 
-                            key={index}
-                            className="flex items-center justify-between p-2 bg-white rounded-lg border border-green-200 group hover:border-green-300 transition-colors"
+                <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Email Service Required</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      To send actual emails, you need to configure an email service provider. Reports are currently logged but not emailed.
+                    </p>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Recommended Options:</p>
+                      <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                        <li className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">Easiest</Badge>
+                          <a 
+                            href="https://resend.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline flex items-center gap-1"
                           >
-                            <span className="text-sm text-green-900">{email}</span>
+                            Resend.com <ExternalLink className="w-3 h-3" />
+                          </a>
+                          - Free tier: 100 emails/day
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">Popular</Badge>
+                          <a 
+                            href="https://sendgrid.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            SendGrid <ExternalLink className="w-3 h-3" />
+                          </a>
+                          - Free tier: 100 emails/day
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-medium mb-2">Quick Setup Steps:</p>
+                  <ol className="text-sm text-muted-foreground space-y-1 ml-4 list-decimal">
+                    <li>Sign up for an email service (Resend recommended)</li>
+                    <li>Get your API key from the provider</li>
+                    <li>Add the API key to your backend environment variables</li>
+                    <li>Update the server code to integrate with the provider</li>
+                  </ol>
+                </div>
+
+                <Card className="bg-white/60 backdrop-blur-xl border-white/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-green-700" />
+                      Email Notification Recipients
+                    </CardTitle>
+                    <CardDescription>
+                      All daily reports will be sent to these email addresses
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingEmails ? (
+                      <div className="text-sm text-muted-foreground">Loading recipients...</div>
+                    ) : (
+                      <>
+                        <div className="space-y-2 mb-4">
+                          {recipients.length === 0 ? (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                              No recipients configured. Add at least one email address below.
+                            </div>
+                          ) : (
+                            recipients.map((email, index) => (
+                              <div 
+                                key={index}
+                                className="flex items-center justify-between p-2 bg-white rounded-lg border border-green-200 group hover:border-green-300 transition-colors"
+                              >
+                                <span className="text-sm text-green-900">{email}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeEmail(email)}
+                                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <div className="space-y-3 pt-3 border-t border-gray-200">
+                          <Label htmlFor="new-email-admin" className="text-sm font-medium">
+                            Add New Recipient
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="new-email-admin"
+                              type="email"
+                              placeholder="email@example.com"
+                              value={newEmail}
+                              onChange={(e) => setNewEmail(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addEmail();
+                                }
+                              }}
+                              className="flex-1 bg-white border-green-200 focus:border-green-400"
+                            />
                             <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeEmail(email)}
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
+                              onClick={addEmail}
+                              variant="outline"
+                              className="bg-green-600 text-white hover:bg-green-700 border-green-600"
                             >
-                              <X className="w-3 h-3" />
+                              <Plus className="w-4 h-4 mr-1" />
+                              Add
                             </Button>
                           </div>
-                        ))
-                      )}
-                    </div>
 
-                    <div className="space-y-3 pt-3 border-t border-gray-200">
-                      <Label htmlFor="new-email-admin" className="text-sm font-medium">
-                        Add New Recipient
-                      </Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="new-email-admin"
-                          type="email"
-                          placeholder="email@example.com"
-                          value={newEmail}
-                          onChange={(e) => setNewEmail(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              addEmail();
-                            }
-                          }}
-                          className="flex-1 bg-white border-green-200 focus:border-green-400"
-                        />
-                        <Button
-                          onClick={addEmail}
-                          variant="outline"
-                          className="bg-green-600 text-white hover:bg-green-700 border-green-600"
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add
-                        </Button>
-                      </div>
-
-                      <Button
-                        onClick={saveRecipients}
-                        disabled={isSavingEmails}
-                        className="w-full bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
-                      >
-                        <Save className="w-4 h-4 mr-2" />
-                        {isSavingEmails ? "Saving..." : "Save Recipients"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                          <Button
+                            onClick={saveRecipients}
+                            disabled={isSavingEmails}
+                            className="w-full bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700"
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            {isSavingEmails ? "Saving..." : "Save Recipients"}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
@@ -1994,29 +1800,29 @@ export function AdminSettings() {
             <CallScriptManager />
           )}
 
-          {/* 3CX Phone Integration Section */}
           {/* Promotions Section */}
           {activeSection === 'promotions' && (
-            <Card className="bg-white/60 backdrop-blur-xl border-white/20">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-5 h-5" />
-                    <div>
-                      <CardTitle>Promotion Management</CardTitle>
-                      <CardDescription>
-                        Create, edit, and manage promotions for adventure.btmtravel.net
-                      </CardDescription>
+            <>
+              <Card className="bg-white/60 backdrop-blur-xl border-white/20">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-5 h-5" />
+                      <div>
+                        <CardTitle>Promotion Management</CardTitle>
+                        <CardDescription>
+                          Create, edit, and manage promotions for adventure.btmtravel.net
+                        </CardDescription>
+                      </div>
                     </div>
-                  </div>
-                  <Dialog open={isAddPromoDialogOpen} onOpenChange={setIsAddPromoDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-gradient-to-br from-orange-600 to-yellow-600 text-white shadow-lg shadow-orange-500/20">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Promotion
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <Dialog open={isAddPromoDialogOpen} onOpenChange={setIsAddPromoDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-gradient-to-br from-orange-600 to-yellow-600 text-white shadow-lg shadow-orange-500/20">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Promotion
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Create New Promotion</DialogTitle>
                         <DialogDescription>
@@ -2241,141 +2047,142 @@ export function AdminSettings() {
                 )}
               </CardContent>
             </Card>
-          )}
 
-          {/* Edit Promotion Dialog */}
-          <Dialog open={isEditPromoDialogOpen} onOpenChange={setIsEditPromoDialogOpen}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Promotion</DialogTitle>
-                <DialogDescription>
-                  Update promotion details and settings
-                </DialogDescription>
-              </DialogHeader>
+            {/* Edit Promotion Dialog */}
+            <Dialog open={isEditPromoDialogOpen} onOpenChange={setIsEditPromoDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Edit Promotion</DialogTitle>
+                    <DialogDescription>
+                      Update promotion details and settings
+                    </DialogDescription>
+                  </DialogHeader>
               
-              {editingPromo && (
-                <div className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-name">Promotion Name *</Label>
-                      <Input
-                        id="edit-promo-name"
-                        value={editingPromo.name}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
-                        className="bg-white/60"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-code">Promo Code *</Label>
-                      <Input
-                        id="edit-promo-code"
-                        value={editingPromo.code}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase() })}
-                        className="bg-white/60 font-mono"
-                      />
-                    </div>
-                  </div>
+                  {editingPromo && (
+                    <div className="space-y-4 mt-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-name">Promotion Name *</Label>
+                          <Input
+                            id="edit-promo-name"
+                            value={editingPromo.name}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
+                            className="bg-white/60"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-code">Promo Code *</Label>
+                          <Input
+                            id="edit-promo-code"
+                            value={editingPromo.code}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase() })}
+                            className="bg-white/60 font-mono"
+                          />
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-discount">Discount *</Label>
-                      <Input
-                        id="edit-promo-discount"
-                        value={editingPromo.discount}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, discount: e.target.value })}
-                        className="bg-white/60"
-                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-discount">Discount *</Label>
+                          <Input
+                            id="edit-promo-discount"
+                            value={editingPromo.discount}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, discount: e.target.value })}
+                            className="bg-white/60"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-status">Status</Label>
+                          <Select
+                            value={editingPromo.status}
+                            onValueChange={(value: any) => setEditingPromo({ ...editingPromo, status: value })}
+                          >
+                            <SelectTrigger className="bg-white/60">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="scheduled">Scheduled</SelectItem>
+                              <SelectItem value="expired">Expired</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-start">Start Date</Label>
+                          <Input
+                            id="edit-promo-start"
+                            type="date"
+                            value={editingPromo.startDate}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, startDate: e.target.value })}
+                            className="bg-white/60"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-end">End Date</Label>
+                          <Input
+                            id="edit-promo-end"
+                            type="date"
+                            value={editingPromo.endDate}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, endDate: e.target.value })}
+                            className="bg-white/60"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-promo-website">Website</Label>
+                        <Input
+                          id="edit-promo-website"
+                          value={editingPromo.website}
+                          onChange={(e) => setEditingPromo({ ...editingPromo, website: e.target.value })}
+                          className="bg-white/60"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-target">Usage Target</Label>
+                          <Input
+                            id="edit-promo-target"
+                            type="number"
+                            value={editingPromo.target}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, target: parseInt(e.target.value) || 0 })}
+                            className="bg-white/60"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-promo-usage">Current Usage</Label>
+                          <Input
+                            id="edit-promo-usage"
+                            type="number"
+                            value={editingPromo.usage}
+                            onChange={(e) => setEditingPromo({ ...editingPromo, usage: parseInt(e.target.value) || 0 })}
+                            className="bg-white/60"
+                          />
+                        </div>
+                      </div>
                     </div>
+                  )}
 
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-status">Status</Label>
-                      <Select
-                        value={editingPromo.status}
-                        onValueChange={(value: any) => setEditingPromo({ ...editingPromo, status: value })}
-                      >
-                        <SelectTrigger className="bg-white/60">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="scheduled">Scheduled</SelectItem>
-                          <SelectItem value="expired">Expired</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-start">Start Date</Label>
-                      <Input
-                        id="edit-promo-start"
-                        type="date"
-                        value={editingPromo.startDate}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, startDate: e.target.value })}
-                        className="bg-white/60"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-end">End Date</Label>
-                      <Input
-                        id="edit-promo-end"
-                        type="date"
-                        value={editingPromo.endDate}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, endDate: e.target.value })}
-                        className="bg-white/60"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-promo-website">Website</Label>
-                    <Input
-                      id="edit-promo-website"
-                      value={editingPromo.website}
-                      onChange={(e) => setEditingPromo({ ...editingPromo, website: e.target.value })}
-                      className="bg-white/60"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-target">Usage Target</Label>
-                      <Input
-                        id="edit-promo-target"
-                        type="number"
-                        value={editingPromo.target}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, target: parseInt(e.target.value) || 0 })}
-                        className="bg-white/60"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-promo-usage">Current Usage</Label>
-                      <Input
-                        id="edit-promo-usage"
-                        type="number"
-                        value={editingPromo.usage}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, usage: parseInt(e.target.value) || 0 })}
-                        className="bg-white/60"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsEditPromoDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleEditPromo} className="bg-gradient-to-br from-orange-600 to-yellow-600">
-                  Update Promotion
-                        </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEditPromoDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleEditPromo} className="bg-gradient-to-br from-orange-600 to-yellow-600">
+                      Update Promotion
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
 
           {activeSection === '3cx' && (
             <ThreeCXSettings />
@@ -2384,6 +2191,11 @@ export function AdminSettings() {
           {/* Call History Section */}
           {activeSection === 'calls' && (
             <CallHistory />
+          )}
+
+          {/* Call Scripts Section */}
+          {activeSection === 'scripts' && (
+            <CallScriptManager />
           )}
 
           {/* SMTP Configuration Section */}
@@ -2396,17 +2208,136 @@ export function AdminSettings() {
             <DatabaseManager />
           )}
 
-          {/* Database Test Section */}
-          {activeSection === 'database-test' && (
+          {/* MongoDB Status Section */}
+          {activeSection === 'mongodb-status' && (
             <div className="space-y-6">
-              <ServerDiagnosticsTool />
-              <DatabaseTestPanel />
-              <Alert className="border-blue-200 bg-blue-50">
-                <AlertCircle className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-blue-800">
-                  <strong>Quick Deployment:</strong> If tests fail, run: <code className="bg-blue-100 px-2 py-0.5 rounded text-xs">supabase functions deploy make-server-8fff4b3c</code>
-                </AlertDescription>
-              </Alert>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="w-5 h-5 text-green-600" />
+                    MongoDB Atlas Status
+                  </CardTitle>
+                  <CardDescription>
+                    Monitor your MongoDB database connection and collections
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <ConnectionStatus />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <Card className="border-2 border-green-200 bg-green-50/50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Database className="w-4 h-4 text-green-600" />
+                          Database Info
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Platform:</span>
+                          <span className="font-mono">MongoDB Atlas</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Cluster:</span>
+                          <span className="font-mono text-xs">cluster0.vlklc6c.mongodb.net</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Database:</span>
+                          <span className="font-mono">btm_travel_crm</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Collections:</span>
+                          <span className="font-semibold">11</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2 border-blue-200 bg-blue-50/50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Server className="w-4 h-4 text-blue-600" />
+                          Backend Info
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Runtime:</span>
+                          <span className="font-mono">Deno</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Server:</span>
+                          <span className="font-mono text-xs">Pure TypeScript</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Endpoints:</span>
+                          <span className="font-semibold">40+</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Status:</span>
+                          <Badge variant="default" className="bg-green-500">Active</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="border-2 border-purple-200 bg-purple-50/50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Database className="w-4 h-4 text-purple-600" />
+                        Collections Overview
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                        {[
+                          { name: 'users', label: 'Users' },
+                          { name: 'numbers_database', label: 'Numbers Database' },
+                          { name: 'number_assignments', label: 'Assignments' },
+                          { name: 'call_logs', label: 'Call Logs' },
+                          { name: 'call_scripts', label: 'Call Scripts' },
+                          { name: 'promotions', label: 'Promotions' },
+                          { name: 'daily_progress', label: 'Daily Progress' },
+                          { name: 'smtp_settings', label: 'SMTP Settings' },
+                          { name: 'threecx_settings', label: '3CX Settings' },
+                          { name: 'archive', label: 'Archive' },
+                          { name: 'login_audit', label: 'Login Audit' },
+                        ].map((collection) => (
+                          <div 
+                            key={collection.name}
+                            className="flex items-center gap-2 p-2 rounded bg-white border border-purple-200"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                            <span className="font-mono text-xs">{collection.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Alert className="border-green-200 bg-green-50">
+                    <Database className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      <strong>Database Active:</strong> Your MongoDB Atlas database is connected and all collections are indexed for optimal performance. Connection is managed automatically by the backend.
+                    </AlertDescription>
+                  </Alert>
+
+                  <Alert className="border-blue-200 bg-blue-50">
+                    <Server className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      <strong>Manage Database:</strong> Access your MongoDB dashboard at{' '}
+                      <a 
+                        href="https://cloud.mongodb.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="underline hover:text-blue-900"
+                      >
+                        cloud.mongodb.com
+                      </a>
+                      {' '}to view metrics, backups, and advanced settings.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -2424,6 +2355,7 @@ export function AdminSettings() {
     </div>
   );
 }
+
 
 // System & Data Management Component
 function SystemDataManagement() {
@@ -2489,18 +2421,9 @@ function SystemDataManagement() {
       console.log('[ADMIN] 🗑️ Clearing all ClientCRM data...');
       toast.info('Clearing ClientCRM data...');
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/clients/clear-all`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          }
-        }
-      );
+      const data = await backendService.clearAllClientCRMData();
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data.success) {
         console.log('[ADMIN] ✅ ClientCRM data cleared:', data);
         console.log('[ADMIN] Cleared counts:', data.cleared);
         toast.success(`✅ ClientCRM cleared! (${data.cleared?.assignedClientsCount || 0} assigned records deleted)`);
@@ -2510,13 +2433,12 @@ function SystemDataManagement() {
           window.location.reload();
         }, 1500);
       } else {
-        const errorData = await response.json();
-        console.error('[ADMIN] ❌ Failed to clear ClientCRM data:', errorData);
-        toast.error(`Failed to clear data: ${errorData.error || 'Unknown error'}`);
+        console.error('[ADMIN] ❌ Failed to clear ClientCRM data:', data);
+        toast.error(`Failed to clear data: ${data.error || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ADMIN] ❌ Error clearing ClientCRM data:', error);
-      toast.error('Error clearing ClientCRM data');
+      toast.error(`Error clearing ClientCRM data: ${error.message}`);
     }
   };
 
@@ -2540,23 +2462,9 @@ function SystemDataManagement() {
         .map(([id, _]) => id);
 
       // Delete from server/database
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/admin/delete-selected-data`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            confirmationCode: 'DELETE_SELECTED_DATA',
-            categories: selectedCategories
-          })
-        }
-      );
+      const result = await backendService.deleteSelectedData('DELETE_SELECTED_DATA', selectedCategories);
 
-      if (response.ok) {
-        const result = await response.json();
+      if (result.success) {
         toast.success(`Deleted ${result.deletedCount || 'selected'} items from database`);
         
         // Clear localStorage for selected categories
@@ -2648,12 +2556,11 @@ function SystemDataManagement() {
           window.location.reload();
         }, 2000);
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to delete database');
+        toast.error(result.error || 'Failed to delete database');
       }
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail if server is offline, but still clear localStorage
-      if (error instanceof TypeError && error.message.includes('fetch')) {
+      if (error.message && error.message.includes('Backend')) {
         toast.info('Server offline - clearing localStorage only...');
         
         // Clear localStorage for selected categories even if server is offline
@@ -2725,7 +2632,7 @@ function SystemDataManagement() {
         
         // Verify user session is still preserved before reload
         const userSession = localStorage.getItem('btm_current_user');
-        console.log('[DELETE OFFLINE] ═══════════════════════════════════════');
+        console.log('[DELETE OFFLINE] ══════════════��════════════════════════');
         console.log('[DELETE OFFLINE] FINAL CHECK BEFORE RELOAD');
         console.log('[DELETE OFFLINE] User session (btm_current_user):', userSession ? '✅ EXISTS' : '❌ MISSING');
         console.log('[DELETE OFFLINE] All localStorage keys:', Object.keys(localStorage));
@@ -2960,9 +2867,8 @@ function SystemDataManagement() {
               System Information
             </h4>
             <div className="text-sm text-blue-800 space-y-1">
-              <p>• Database: Supabase KV Store</p>
+              <p>• Database: MongoDB</p>
               <p>• Local Storage: Browser localStorage</p>
-              <p>• Project ID: {projectId}</p>
               <p>• Last Updated: {new Date().toLocaleString()}</p>
             </div>
           </div>

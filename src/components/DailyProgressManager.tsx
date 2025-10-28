@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { RefreshCw, Clock, CheckCircle2, AlertCircle, RotateCcw, Calendar, TrendingUp } from "lucide-react";
 import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
 interface UserProgress {
@@ -50,25 +50,14 @@ export function DailyProgressManager() {
   const loadProgressData = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/daily-progress`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setProgressData({
-          userProgress: data.progress || {},
-          lastReset: data.lastReset
-        });
-      }
-    } catch (error) {
+      const data = await backendService.getDailyProgress();
+      setProgressData({
+        userProgress: data.progress?.userProgress || {},
+        lastReset: data.progress?.lastReset
+      });
+    } catch (error: any) {
       console.error('[DAILY PROGRESS] Error loading progress data:', error);
-      toast.error("Failed to load daily progress data");
+      toast.error(error.message || "Failed to load daily progress data");
     } finally {
       setIsLoading(false);
     }
@@ -78,24 +67,13 @@ export function DailyProgressManager() {
     if (!autoResetEnabled) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/daily-progress/check-reset`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.wasReset) {
-          console.log('[DAILY PROGRESS] Auto-reset completed');
-          await loadProgressData();
-          toast.success("Daily progress automatically reset at midnight!");
-        }
+      const data = await backendService.checkDailyReset();
+      if (data.wasReset) {
+        console.log('[DAILY PROGRESS] Auto-reset completed');
+        await loadProgressData();
+        toast.success("Daily progress automatically reset at midnight!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DAILY PROGRESS] Error checking auto-reset:', error);
     }
   };
@@ -103,20 +81,9 @@ export function DailyProgressManager() {
   const handleManualReset = async () => {
     setIsResetting(true);
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/daily-progress/reset`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        
+      const data = await backendService.resetDailyProgress();
+      
+      if (data.success) {
         if (data.alreadyReset) {
           toast.info("Progress was already reset today");
         } else {

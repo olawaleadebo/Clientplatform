@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Checkbox } from "./ui/checkbox";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 import { toast } from "sonner@2.0.3";
 
 interface Promotion {
@@ -47,55 +47,31 @@ export function PromoSales() {
     try {
       setIsRefreshing(true);
       
-      // Build query params for filtering
-      const params = new URLSearchParams();
-      if (filterCustomerTypes.length > 0) {
-        // For now, just use the first selected type (backend supports one at a time)
-        params.append('customerType', filterCustomerTypes[0]);
-      }
-      if (filterFlight.trim()) {
-        params.append('flight', filterFlight.trim());
-      }
+      const data = await backendService.getPromotions();
       
-      const url = `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/promotions${params.toString() ? `?${params.toString()}` : ''}`;
+      // Map backend promotions to include default analytics if not present
+      const mappedPromotions = (data.promotions || []).map((promo: any) => ({
+        ...promo,
+        usage: promo.usage || 0,
+        target: promo.target || 100,
+        revenue: promo.revenue || 0,
+        views: promo.views || 0,
+        conversions: promo.conversions || 0,
+        targetCustomerTypes: promo.targetCustomerTypes || [],
+        targetFlights: promo.targetFlights || []
+      }));
       
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Map backend promotions to include default analytics if not present
-        const mappedPromotions = (data.promotions || []).map((promo: any) => ({
-          ...promo,
-          usage: promo.usage || 0,
-          target: promo.target || 100,
-          revenue: promo.revenue || 0,
-          views: promo.views || 0,
-          conversions: promo.conversions || 0,
-          targetCustomerTypes: promo.targetCustomerTypes || [],
-          targetFlights: promo.targetFlights || []
-        }));
-        setPromotions(mappedPromotions);
-        if (showToast) {
-          toast.success(`${mappedPromotions.length} promotions loaded`);
-        }
-      } else {
-        console.error('[PROMO SALES] Failed to fetch promotions:', response.statusText);
-        if (showToast) {
-          toast.error('Failed to refresh promotions');
-        }
-        // Set empty array on error
-        setPromotions([]);
+      setPromotions(mappedPromotions);
+      
+      if (showToast) {
+        toast.success(`${mappedPromotions.length} promotions loaded`);
       }
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail if server is offline
       if (!(error instanceof TypeError && error.message.includes('fetch'))) {
         console.error('[PROMO SALES] Error fetching promotions:', error);
         if (showToast) {
-          toast.error('Error refreshing promotions');
+          toast.error(error.message || 'Error refreshing promotions');
         }
       }
       // Set empty array on error

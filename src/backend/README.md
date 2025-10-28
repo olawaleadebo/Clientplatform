@@ -1,261 +1,232 @@
-# BTM Travel CRM Backend - Pure MongoDB + Deno
+# BTM Travel CRM Backend Server
 
-## 🚀 No Supabase! Just MongoDB + Deno!
+MongoDB-based backend server for BTM Travel CRM platform.
 
-This is your backend server for the BTM Travel CRM. It's a pure Deno application with MongoDB Atlas, completely independent of Supabase.
+## Quick Start
 
----
+### Windows
+```bat
+cd backend
+start.bat
+```
 
-## 📁 Files
-
-- **`server.tsx`** - Main Deno server with 40+ REST API endpoints
-- **`mongodb.tsx`** - MongoDB connection utilities and helpers
-- **`deno.json`** - Deno configuration with MongoDB dependency
-
----
-
-## 🏃 Quick Start
-
-### Run Locally:
+### Mac/Linux
 ```bash
-deno run --allow-net --allow-env server.tsx
+cd backend
+chmod +x start.sh
+./start.sh
 ```
 
-Server will start on **http://localhost:8000**
+## If You're Getting 404 Errors
 
-### Run with Auto-Reload (Development):
+Run the force restart script:
+
+### Windows
+```bat
+cd backend
+force-restart.bat
+```
+
+### Mac/Linux  
 ```bash
-deno run --allow-net --allow-env --watch server.tsx
+cd backend
+chmod +x force-restart.sh
+./force-restart.sh
 ```
 
-### Using deno.json tasks:
-```bash
-deno task start  # Production
-deno task dev    # Development with watch mode
-```
+See [TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md) for detailed help.
 
----
+## Server Information
 
-## ✅ Test the Server
+- **Port:** 8000
+- **URL:** http://localhost:8000
+- **Version:** 6.5.0-MANAGER-ENDPOINTS-VERIFIED-WITH-DEBUG
+- **Database:** MongoDB (Atlas)
 
-```bash
-curl http://localhost:8000/health
-```
+## Available Scripts
 
-**Expected Response:**
-```json
-{
-  "status": "ok",
-  "message": "BTM Travel CRM Server is running (MongoDB)",
-  "version": "3.0.0-mongodb-standalone"
-}
-```
+| Script | Purpose |
+|--------|---------|
+| `start.bat` / `start.sh` | Start the server normally |
+| `force-restart.bat` / `force-restart.sh` | Kill old processes and start fresh |
+| `kill-old-servers.bat` / `kill-old-servers.sh` | Kill all Deno processes |
+| `check-server-version.bat` / `check-server-version.sh` | Verify server is running latest code |
+| `test-manager-endpoints.bat` / `test-manager-endpoints.sh` | Test manager portal endpoints |
+| `verify-endpoints.bat` / `verify-endpoints.sh` | Test all major endpoints |
+| `test-connection.bat` / `test-connection.sh` | Test server connectivity |
 
----
+## Endpoints Overview
 
-## 🗄️ MongoDB Connection
-
-**Database:** `btm_travel_crm`  
-**Cluster:** `cluster0.vlklc6c.mongodb.net`  
-**Connection:** Hardcoded in `mongodb.tsx` (line 17)
-
-**To change the connection string:**
-Edit `mongodb.tsx` line 17:
-```tsx
-const MONGODB_URI = 'mongodb+srv://...';
-```
-
----
-
-## 📊 Collections (11 total)
-
-1. **users** - User accounts & permissions
-2. **numbers_database** - Numbers with customerType & airplane filters
-3. **number_assignments** - Assigned numbers to agents
-4. **call_logs** - Call history & analytics
-5. **call_scripts** - Agent call scripts
-6. **promotions** - Promotional campaigns
-7. **daily_progress** - Daily call tracking
-8. **smtp_settings** - Email configuration
-9. **threecx_settings** - Phone system configuration
-10. **archive** - Archived records
-11. **login_audit** - Login attempt logs
-
----
-
-## 🔌 API Endpoints
-
-### Health
+### Health & Status
 - `GET /health` - Server health check
-- `GET /test` - Test endpoint
+- `GET /test` - Full system test
+- `GET /debug/manager-endpoints` - Manager endpoints diagnostic
 
 ### Authentication
 - `POST /users/login` - User login
-- `GET /login-audit` - Login history
-
-### Users
-- `GET /users` - Get all users
-- `POST /users` - Create new user
+- `GET /users` - List users
+- `POST /users` - Create user
 - `PUT /users/:id` - Update user
 - `DELETE /users/:id` - Delete user
 
-### Numbers Database (with Smart Filters!)
-- `GET /database/clients` - Get available numbers
-- `POST /database/clients/import` - Upload numbers
-- `POST /database/clients/assign` - Assign numbers (filter by customerType & airplane!)
-- `DELETE /database/clients/:id` - Delete number
-- `POST /database/clients/bulk-delete` - Bulk delete
+### Manager Portal (Fixed in v6.5.0)
+- `GET /team-performance` ✅ - Team performance metrics
+- `GET /agent-monitoring/overview` ✅ - Agent monitoring dashboard
+- `GET /agent-monitoring/agent/:id` - Individual agent details
 
-### Number Assignments
-- `GET /assignments?agentId=xxx` - Get assignments for agent
-- `POST /assignments/claim` - Claim assignment
-- `POST /assignments/mark-called` - Mark assignment as called
+### Database
+- `GET /database/clients` - All clients (CRM numbers)
+- `GET /database/customers` ✅ - All customers
+- `GET /database/customers/assigned/:id` - Assigned customers
+- `POST /database/clients/import` - Import clients
+- `POST /database/customers/import` - Import customers
 
-### Call Logs
-- `GET /call-logs?agentId=xxx` - Get call logs
-- `POST /call-logs` - Create call log
+### Assignments & Claims
+- `GET /assignments` - All assignments
+- `POST /assignments/claim` - Claim a number
+- `POST /assignments/mark-called` - Mark as called
+- `POST /claim-number` - Claim number (legacy)
+- `POST /release-number` - Release claim
+- `POST /extend-number-claim` - Extend claim
 
-### Daily Progress
-- `GET /daily-progress` - Get daily progress
-- `POST /daily-progress` - Update progress
-- `GET /daily-progress/check-reset` - Check for auto-reset
-- `POST /daily-progress/reset` - Manual reset
-
-### Call Scripts
-- `GET /call-scripts` - Get all scripts
-- `POST /call-scripts` - Create script
-- `POST /call-scripts/:id/activate` - Activate script
-- `DELETE /call-scripts/:id` - Delete script
-- `GET /call-scripts/active/:type` - Get active script (prospective/existing)
-
-### Promotions
-- `GET /promotions` - Get all promotions
-- `POST /promotions` - Create promotion
-- `PUT /promotions/:id` - Update promotion
-- `DELETE /promotions/:id` - Delete promotion
+### Call Management
+- `GET /call-logs` - Call history
+- `POST /call-logs` - Log a call
+- `GET /call-scripts` - Call scripts
+- `POST /call-scripts` - Add script
+- `GET /call-scripts/active/:type` - Active script
 
 ### Settings
-- `GET /smtp-settings` - Get SMTP settings
-- `POST /smtp-settings` - Update SMTP settings
-- `POST /smtp-test` - Test SMTP connection
-- `GET /threecx-settings` - Get 3CX settings
-- `POST /threecx-settings` - Update 3CX settings
+- `GET /smtp-settings` - SMTP configuration
+- `POST /smtp-settings` - Update SMTP
+- `POST /smtp-test` - Test SMTP
+- `GET /threecx-settings` - 3CX configuration
+- `POST /threecx-settings` - Update 3CX
+- `GET /email-recipients` - Email recipients list
+- `POST /email-recipients` - Update recipients
+
+### Admin Operations
+- `POST /database/reset-all` - Reset all data
+- `POST /admin/delete-selected-data` - Delete specific data
+- `POST /cron/daily-archive` - Run archive job
+- `DELETE /database/clients/clear-all` - Clear all clients
 
 ### Archive
-- `GET /archive?type=xxx` - Get archived items
-- `POST /archive` - Archive an item
-- `POST /archive/restore` - Restore from archive
+- `GET /database/clients/archive` - Archived clients
+- `GET /database/customers/archive` - Archived customers
+- `POST /database/clients/archive/bulk-restore` - Restore clients
+- `POST /database/customers/archive/bulk-restore` - Restore customers
 
----
+## MongoDB Collections
 
-## 🎯 Smart Number Assignment Example
+- `users` - User accounts
+- `numbers_database` - Client/CRM phone numbers
+- `customers_database` - Customer records
+- `number_assignments` - Assignment tracking
+- `number_claims` - Number claim locks
+- `call_logs` - Call history
+- `call_scripts` - Call scripts
+- `daily_progress` - Daily stats
+- `promotions` - Promo sales
+- `archive` - Archived records
+- `login_audit` - Login attempts
+- `smtp_settings` - Email config
+- `threecx_settings` - Phone config
+- `email_recipients` - Email lists
 
-Assign 50 Corporate numbers for flight BA123:
+## MongoDB Connection
 
-```bash
-curl -X POST http://localhost:8000/database/clients/assign \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agentId": "agent-123",
-    "filters": {
-      "customerType": "Corporate",
-      "airplane": "BA123",
-      "count": 50
-    }
-  }'
+The server connects to MongoDB Atlas automatically. Connection details are in `mongodb.tsx`.
+
+**First startup may take 10-30 seconds** while MongoDB connects. You'll see:
+```
+🔧 Starting MongoDB initialization in background...
+✅ MongoDB connection pool ready!
 ```
 
----
+## Troubleshooting
 
-## 🚀 Deploy to Production
+### Server won't start
+1. Check if port 8000 is already in use
+2. Kill old Deno processes: `force-restart.bat` / `force-restart.sh`
 
-### Deno Deploy (Recommended):
-```bash
-deployctl deploy --project=btm-travel-crm server.tsx
+### Getting 404 errors
+The server is running old code. Run `force-restart.bat` / `force-restart.sh`
+
+### Getting 503 errors
+MongoDB is initializing. Wait 30 seconds and try again.
+
+### Connection timeout
+1. Server is not running - start it with `start.bat` / `start.sh`
+2. Wrong URL in `/utils/config.tsx` - should be `http://localhost:8000`
+
+See [TROUBLESHOOTING-404.md](./TROUBLESHOOTING-404.md) for detailed troubleshooting.
+
+## Development
+
+### File Structure
+```
+backend/
+├── server.tsx          # Main server file ⭐
+├── mongodb.tsx         # MongoDB connection
+├── start.bat           # Start script (Windows)
+├── start.sh            # Start script (Mac/Linux)
+├── force-restart.*     # Force restart scripts
+├── check-server-version.*  # Version check
+├── test-*.* / verify-*.*   # Test scripts
+└── README.md           # This file
 ```
 
-### Railway:
-```bash
-railway up
+### Making Changes
+
+1. Edit `server.tsx`
+2. Stop the server (Ctrl+C)
+3. Restart with `start.bat` / `start.sh`
+
+**OR** just run `force-restart.bat` / `force-restart.sh`
+
+### Adding New Endpoints
+
+1. Add endpoint handler in `server.tsx` inside the main try block
+2. Add endpoint to console log at bottom of file
+3. Restart server
+4. Test with curl or test scripts
+
+Example:
+```typescript
+if (path === '/my-new-endpoint' && req.method === 'GET') {
+  const readyCheck = checkMongoReady();
+  if (readyCheck) return readyCheck;
+  
+  try {
+    const collection = await getCollection(Collections.MY_COLLECTION);
+    const data = await collection.find({}).toArray();
+    
+    return new Response(
+      JSON.stringify({ success: true, data: convertMongoDocs(data) }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
 ```
 
-### Render:
-- Point to `/backend/server.tsx`
-- Build: `deno cache server.tsx`
-- Start: `deno run --allow-net --allow-env server.tsx`
+## Important Notes
 
-### Fly.io:
-```bash
-flyctl launch
-flyctl deploy
-```
+- ✅ **USE THIS FILE:** `/backend/server.tsx`
+- ❌ **DON'T USE:** `/supabase/functions/server/index.tsx` (old/deprecated)
+- The server must be running for the frontend to work
+- All endpoints require the server to be at `http://localhost:8000`
+- Frontend config is at `/utils/config.tsx`
 
-**After deployment, update `/utils/config.tsx` in frontend with your deployed URL!**
+## Version History
 
----
-
-## 🔧 Environment
-
-**Required Permissions:**
-- `--allow-net` - Network access (HTTP server, MongoDB connection)
-- `--allow-env` - Environment variables (optional, for future use)
-
-**No environment variables required!** MongoDB URI is hardcoded.
-
----
-
-## 📝 Default Admin Account
-
-On first connection, the server creates:
-
-**Username:** admin  
-**Password:** admin123  
-**Role:** admin  
-
-⚠️ **Change this password immediately after deployment!**
-
----
-
-## 🔍 Logging
-
-The server logs all requests:
-```
-[BTM CRM Server] [GET] /health
-[MongoDB] Connecting to database...
-[MongoDB] ✅ Connected successfully
-[MongoDB] Initializing database...
-[MongoDB] ✅ Indexes created successfully
-```
-
----
-
-## ✨ Features
-
-- ✅ **Pure Deno** - No Supabase, no frameworks
-- ✅ **MongoDB Atlas** - Production-ready database
-- ✅ **Smart Filtering** - Filter by customerType & airplane
-- ✅ **Auto-Reset** - Daily progress resets at midnight
-- ✅ **Indexes** - Optimized queries
-- ✅ **CORS Enabled** - Works with any frontend
-- ✅ **Error Handling** - Comprehensive error responses
-
----
-
-## 🎉 You're Independent!
-
-This server is completely independent and can be deployed anywhere that supports Deno:
-- Deno Deploy
-- Railway
-- Render  
-- Fly.io
-- DigitalOcean
-- AWS
-- Google Cloud
-- Azure
-- Your own server
-
-**No vendor lock-in!**
-
----
-
-**🚀 Happy deploying!**
+- **6.5.0** - Added debug endpoint and force restart scripts to fix 404 issues
+- **6.4.0** - Manager portal endpoints fixed
+- **6.3.0** - All endpoints working
+- **6.0.0** - MongoDB migration complete, Supabase removed
+- **5.x** - Legacy Supabase version (deprecated)

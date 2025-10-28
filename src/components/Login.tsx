@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner@2.0.3";
 import { motion } from "motion/react";
 import btmLogo from "figma:asset/da4baf9e9e75fccb7e053a2cc52f5b251f4636a9.png";
+import { backendService } from "../utils/backendService";
 
 interface LoginProps {
   onBack?: () => void;
@@ -29,6 +30,7 @@ export function Login({ onBack }: LoginProps = {}) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const { login } = useUser();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -48,7 +50,57 @@ export function Login({ onBack }: LoginProps = {}) {
     if (success) {
       toast.success("Login successful! Welcome to BTMTravel CRM");
     } else {
-      toast.error("Invalid username or password");
+      // Check if this is the first time setup (trying admin/admin123)
+      if (username === 'admin' && password === 'admin123') {
+        toast.info("First time login detected! Initializing database...", {
+          duration: 3000,
+        });
+        
+        // Automatically initialize the database
+        setTimeout(() => handleInitialize(), 500);
+      } else {
+        toast.error("Invalid username or password");
+      }
+    }
+  };
+
+  const handleInitialize = async () => {
+    setIsInitializing(true);
+    try {
+      toast.info("🔄 Initializing database and creating admin user...");
+      const result = await backendService.setupInit();
+      
+      if (result.success) {
+        toast.success("✅ Database initialized! Logging you in...", {
+          duration: 3000,
+        });
+        
+        // Auto-fill and auto-login
+        setUsername("admin");
+        setPassword("admin123");
+        
+        // Auto-login after a short delay
+        setTimeout(async () => {
+          const loginSuccess = await login("admin", "admin123");
+          if (loginSuccess) {
+            toast.success("Welcome to BTM Travel CRM! 🎉");
+          }
+        }, 1000);
+      } else {
+        // Check if already initialized
+        if (result.message && result.message.includes('already initialized')) {
+          toast.info("Database is already set up. Please login with your credentials.", {
+            duration: 5000,
+          });
+        } else {
+          toast.error(result.message || "Failed to initialize database");
+        }
+      }
+    } catch (error: any) {
+      // Silently handle initialization errors
+      toast.error("Failed to initialize database. Make sure the backend server is running.");
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -177,7 +229,7 @@ export function Login({ onBack }: LoginProps = {}) {
                 <Button
                   type="submit"
                   className="w-full h-14 bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 hover:from-blue-500 hover:via-purple-500 hover:to-violet-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group"
-                  disabled={isLoading}
+                  disabled={isLoading || isInitializing}
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {isLoading ? "Signing in..." : "Sign In"}
@@ -187,22 +239,35 @@ export function Login({ onBack }: LoginProps = {}) {
                 </Button>
               </form>
 
+              {/* Initialize Database Button */}
+              <Button
+                type="button"
+                onClick={handleInitialize}
+                variant="outline"
+                className="w-full h-12 bg-white/5 border-white/30 text-white hover:bg-white/10 hover:border-white/50 rounded-xl transition-all duration-300"
+                disabled={isLoading || isInitializing}
+              >
+                {isInitializing ? "Initializing Database..." : "🔧 Initialize Database (First Time)"}
+              </Button>
+
               {/* Demo Credentials */}
-              <Alert className="mt-6 bg-white/5 border-white/20 backdrop-blur-xl">
+              {(
+                <Alert className="mt-4 bg-white/5 border-white/20 backdrop-blur-xl">
                 <AlertDescription>
                   <div className="space-y-2">
                     <p className="font-semibold text-white flex items-center gap-2">
                       <Shield className="w-4 h-4" />
-                      Demo Credentials:
+                      First Time Setup:
                     </p>
                     <div className="text-sm text-white/80 space-y-1 ml-6">
-                      <p><strong>Admin:</strong> admin / admin123</p>
-                      <p><strong>Manager:</strong> manager / manager123</p>
-                      <p><strong>Agent:</strong> agent / agent123</p>
+                      <p>1. Just try logging in with: <strong className="text-blue-300">admin / admin123</strong></p>
+                      <p>2. Database will auto-initialize on first login! ✨</p>
+                      <p>3. Create more users in Admin panel after login</p>
                     </div>
                   </div>
                 </AlertDescription>
               </Alert>
+              )}
             </div>
 
             {/* Footer */}

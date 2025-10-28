@@ -94,10 +94,10 @@ export function ThreeCXProvider({ children }: { children: ReactNode }) {
 
     setActiveCall(call);
 
-    // If 3CX is not enabled, work in demo/simulation mode
+    // If 3CX is not enabled, work in simulation mode
     if (!config.enabled) {
       toast.success(`Calling ${contactName || phoneNumber}...`, {
-        description: "Demo mode - 3CX integration not enabled"
+        description: "3CX integration not enabled - simulation only"
       });
       
       // Simulate call connection

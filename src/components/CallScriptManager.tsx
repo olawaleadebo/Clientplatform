@@ -19,7 +19,7 @@ import {
   AlertCircle 
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 
 export interface CallScript {
   id: string;
@@ -58,22 +58,11 @@ export function CallScriptManager() {
   const loadScripts = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/call-scripts`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setScripts(data.scripts || []);
-      }
-    } catch (error) {
+      const data = await backendService.getCallScripts();
+      setScripts(data.scripts || []);
+    } catch (error: any) {
       console.error('Error loading call scripts:', error);
-      toast.error('Failed to load call scripts');
+      toast.error(error.message || 'Failed to load call scripts');
     } finally {
       setIsLoading(false);
     }
@@ -109,29 +98,19 @@ export function CallScriptManager() {
         id: editingScript?.id
       };
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/call-scripts`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(scriptData)
-        }
-      );
-
-      if (response.ok) {
+      const response = await backendService.addCallScript(scriptData);
+      
+      if (response.success) {
         toast.success(editingScript ? 'Script updated successfully' : 'Script created successfully');
         setIsDialogOpen(false);
         resetForm();
         loadScripts();
       } else {
-        throw new Error('Failed to save script');
+        throw new Error(response.error || 'Failed to save script');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving script:', error);
-      toast.error('Failed to save script');
+      toast.error(error.message || 'Failed to save script');
     }
   };
 
@@ -141,49 +120,33 @@ export function CallScriptManager() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/call-scripts/${id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        }
-      );
-
-      if (response.ok) {
+      const response = await backendService.deleteCallScript(id);
+      
+      if (response.success) {
         toast.success('Script deleted successfully');
         loadScripts();
       } else {
-        throw new Error('Failed to delete script');
+        throw new Error(response.error || 'Failed to delete script');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting script:', error);
-      toast.error('Failed to delete script');
+      toast.error(error.message || 'Failed to delete script');
     }
   };
 
   const handleSetActive = async (id: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/call-scripts/${id}/activate`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`
-          }
-        }
-      );
-
-      if (response.ok) {
+      const response = await backendService.activateCallScript(id);
+      
+      if (response.success) {
         toast.success('Active script updated');
         loadScripts();
       } else {
-        throw new Error('Failed to set active script');
+        throw new Error(response.error || 'Failed to set active script');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error setting active script:', error);
-      toast.error('Failed to set active script');
+      toast.error(error.message || 'Failed to set active script');
     }
   };
 

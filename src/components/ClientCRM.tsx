@@ -17,7 +17,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collap
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { Alert, AlertDescription } from "./ui/alert";
 import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { backendService } from '../utils/backendService';
 import { useUser } from './UserContext';
 import { ManagerDashboard } from './ManagerDashboard';
@@ -43,6 +42,7 @@ interface Contact {
   assignedToName?: string;
   assignedAt?: string;
   createdAt?: string;
+  assignmentId?: string; // Reference to the assignment in the database
 }
 
 // No hardcoded contacts - all contacts come from the database
@@ -156,7 +156,7 @@ export function ClientCRM() {
     loadActiveScript();
   }, []);
 
-  // Load assigned contacts from database
+  // Load assigned contacts from database (using assignments system)
   useEffect(() => {
     const loadContacts = async () => {
       try {
@@ -168,18 +168,33 @@ export function ClientCRM() {
           return;
         }
 
-        // Load contacts assigned to this agent from the database
-        const data = await backendService.getClients();
+        // Load assignments from the centralized database
+        const data = await backendService.getAssignments(currentUser.id);
         
-        // Filter contacts assigned to current user
-        const userContacts = (data.clients || []).filter(
-          (c: any) => c.assignedTo === currentUser.id && c.status !== 'archived'
+        // Convert assignments to contacts (filter out already called)
+        const activeAssignments = (data.assignments || []).filter(
+          (a: any) => !a.called
         );
         
-        console.log(`[CRM] ✅ Loaded ${userContacts.length} contacts for ${currentUser.username}`);
+        const userContacts = activeAssignments.map((assignment: any) => ({
+          id: assignment.id,
+          name: assignment.numberData?.name || assignment.numberData?.company || 'Unknown',
+          phone: assignment.numberData?.phoneNumber || assignment.numberData?.phone || '',
+          email: assignment.numberData?.email || '',
+          company: assignment.numberData?.company || '',
+          businessType: assignment.numberData?.customerType || assignment.numberData?.businessType,
+          status: 'pending',
+          assignedTo: assignment.agentId,
+          assignedAt: assignment.assignedAt,
+          assignmentId: assignment.id, // Keep track of assignment ID
+          ...assignment.numberData
+        }));
+        
+        console.log(`[CRM] ✅ Loaded ${userContacts.length} assignments for ${currentUser.username}`);
         setContacts(userContacts);
       } catch (error) {
-        console.log('[CRM] Using demo mode');
+        console.error('[CRM] Failed to load contacts:', error);
+        toast.error('Failed to load contacts. Please check backend connection.');
         setContacts([]);
       }
     };
@@ -191,7 +206,7 @@ export function ClientCRM() {
           setArchivedContacts(data.contacts);
         }
       } catch (error) {
-        console.log('[CRM] Using demo mode');
+        console.error('[CRM] Failed to load archived contacts:', error);
       } finally {
         setIsLoadingContacts(false);
       }
@@ -201,34 +216,10 @@ export function ClientCRM() {
     loadArchivedContacts();
   }, [currentUser]);
 
-  // Helper function to save contacts to backend
-  const saveContactsToBackend = async (updatedContacts: Contact[]) => {
-    try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/prospective-contacts`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({ contacts: updatedContacts })
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to save contacts');
-      }
-    } catch (error) {
-      console.error('[CRM] Error saving contacts:', error);
-      toast.error('Failed to save contacts to database');
-    }
-  };
-
-  // Update contacts and persist to backend
+  // Update contacts in local state (assignments are managed by backend)
   const updateContacts = async (updatedContacts: Contact[]) => {
     setContacts(updatedContacts);
-    await saveContactsToBackend(updatedContacts);
+    // Note: Individual assignments are updated via markAssignmentCalled() when needed
   };
 
   const handleDeleteClick = (contact: Contact) => {
@@ -278,15 +269,14 @@ export function ClientCRM() {
     try {
       const contactsToArchive = contacts.filter(c => selectedContactIds.includes(c.id));
       
-      // Archive each contact via API
+      // Archive each contact via backendService
       for (const contact of contactsToArchive) {
-        await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/clients/archive/${currentUser?.id}/${contact.id}`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${publicAnonKey}` }
-          }
-        );
+        await backendService.archiveContact(contact);
+        
+        // If this is an assignment, mark it as called
+        if (contact.assignmentId) {
+          await backendService.markAssignmentCalled(contact.assignmentId, 'archived');
+        }
       }
 
       // Update local state
@@ -305,36 +295,41 @@ export function ClientCRM() {
   };
 
   const handleRestoreSelected = async () => {
-    const contactsToRestore = archivedContacts.filter(c => selectedContactIds.includes(c.id));
-    const updatedArchived = archivedContacts.filter(c => !selectedContactIds.includes(c.id));
-    const updatedContacts = [...contacts, ...contactsToRestore];
-
-    setContacts(updatedContacts);
-    setArchivedContacts(updatedArchived);
-    
-    // Save both to backend
-    await saveContactsToBackend(updatedContacts);
-    await saveArchivedContactsToBackend(updatedArchived);
-    
-    setSelectedContactIds([]);
-    toast.success(`${contactsToRestore.length} contact(s) restored successfully`);
-  };
-
-  const saveArchivedContactsToBackend = async (archivedContactsList: Contact[]) => {
     try {
-      await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/prospective-contacts/archived`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({ contacts: archivedContactsList })
-        }
-      );
+      const contactsToRestore = archivedContacts.filter(c => selectedContactIds.includes(c.id));
+      
+      for (const contact of contactsToRestore) {
+        await backendService.restoreFromArchive(contact.id, 'contact');
+      }
+      
+      // Reload contacts to get updated list
+      const data = await backendService.getAssignments(currentUser?.id);
+      const activeAssignments = (data.assignments || []).filter((a: any) => !a.called);
+      const userContacts = activeAssignments.map((assignment: any) => ({
+        id: assignment.id,
+        name: assignment.numberData?.name || assignment.numberData?.company || 'Unknown',
+        phone: assignment.numberData?.phoneNumber || assignment.numberData?.phone || '',
+        email: assignment.numberData?.email || '',
+        company: assignment.numberData?.company || '',
+        businessType: assignment.numberData?.customerType || assignment.numberData?.businessType,
+        status: 'pending',
+        assignedTo: assignment.agentId,
+        assignedAt: assignment.assignedAt,
+        assignmentId: assignment.id,
+        ...assignment.numberData
+      }));
+      
+      setContacts(userContacts);
+      
+      // Reload archived contacts
+      const archiveData = await backendService.getArchivedContacts();
+      setArchivedContacts(archiveData.contacts || []);
+      
+      setSelectedContactIds([]);
+      toast.success(`${contactsToRestore.length} contact(s) restored successfully`);
     } catch (error) {
-      console.error('[CRM] Error saving archived contacts:', error);
+      console.error('[CRM] Error restoring contacts:', error);
+      toast.error('Failed to restore contacts');
     }
   };
 
@@ -364,24 +359,41 @@ export function ClientCRM() {
   const handleCompleteCall = async () => {
     if (!selectedContact) return;
 
-    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    
-    const updatedContacts = contacts.map(c =>
-      c.id === selectedContact.id
-        ? { ...c, status: "completed" as const, notes: currentNotes, lastContact: today }
-        : c
-    );
-
-    await updateContacts(updatedContacts);
-    
-    // Increment daily call count
-    incrementCallCount();
-    
-    setIsCallDialogOpen(false);
-    setSelectedContact(null);
-    setCurrentNotes("");
-    setEditableContact(null);
-    toast.success("Call completed successfully!");
+    try {
+      // Mark assignment as called in backend
+      if (selectedContact.assignmentId) {
+        await backendService.markAssignmentCalled(selectedContact.assignmentId, 'completed');
+      }
+      
+      // Log the call
+      await backendService.addCallLog({
+        agentId: currentUser?.id,
+        agentName: currentUser?.name,
+        phoneNumber: selectedContact.phone,
+        contactName: selectedContact.name,
+        direction: 'outbound',
+        duration: 0,
+        outcome: 'completed',
+        notes: currentNotes,
+        callTime: new Date().toISOString(),
+      });
+      
+      // Remove from local contacts list (assignment is now complete)
+      const updatedContacts = contacts.filter(c => c.id !== selectedContact.id);
+      setContacts(updatedContacts);
+      
+      // Increment daily call count
+      incrementCallCount();
+      
+      setIsCallDialogOpen(false);
+      setSelectedContact(null);
+      setCurrentNotes("");
+      setEditableContact(null);
+      toast.success("Call completed and logged!");
+    } catch (error) {
+      console.error('[CRM] Error completing call:', error);
+      toast.error('Failed to complete call');
+    }
   };
 
   const handleCancelCall = () => {
@@ -421,24 +433,8 @@ export function ClientCRM() {
 
       updateContacts(updatedContacts);
       
-      // Also update in the central database via backend API
-      if (currentUser) {
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/clients/assigned/${currentUser.id}/${selectedContact.id}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${publicAnonKey}`
-            },
-            body: JSON.stringify(updatedContactData)
-          }
-        );
-
-        if (!response.ok) {
-          console.error('[CRM] Failed to update contact in central database');
-        }
-      }
+      // Note: Contact updates are saved locally for the assignment
+      // The master record is updated when the assignment is completed
 
       setSelectedContact({
         ...selectedContact,
@@ -465,25 +461,13 @@ export function ClientCRM() {
     setIsSendingEmail(true);
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/send-email`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({
-            to: selectedContact.email,
-            subject: emailSubject,
-            htmlContent: emailMessage.replace(/\n/g, '<br>')
-          })
-        }
+      const data = await backendService.sendEmail(
+        selectedContact.email,
+        emailSubject,
+        emailMessage.replace(/\n/g, '<br>')
       );
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (data.success) {
         toast.success(`Email sent to ${selectedContact.email}!`);
         setEmailSubject("");
         setEmailMessage("");
@@ -1297,22 +1281,10 @@ export function ClientCRM() {
       const updatedContacts = [...contactsWithAssignment, ...contacts];
       await saveContactsToBackend(updatedContacts);
       
-      // Also save to central database
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/clients/import`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({
-            records: contactsWithAssignment
-          })
-        }
-      );
-
-      if (!response.ok) {
+      // Also save to central database using backendService
+      const result = await backendService.importClients(contactsWithAssignment);
+      
+      if (!result.success) {
         console.error('[CRM] Failed to import contacts to central database');
       }
       
@@ -1364,22 +1336,10 @@ export function ClientCRM() {
       // Add to local state
       updateContacts([contact, ...contacts]);
       
-      // Add to central database
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/database/clients/import`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({
-            records: [contact]
-          })
-        }
-      );
+      // Add to central database using backendService
+      const result = await backendService.importClients([contact]);
 
-      if (!response.ok) {
+      if (!result.success) {
         console.error('[CRM] Failed to add contact to central database');
         toast.error("Contact added locally but failed to save to central database");
       } else {

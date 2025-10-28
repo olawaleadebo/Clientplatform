@@ -1,0 +1,51 @@
+===========================================
+🚨 COPY & PASTE THIS TO FIX 404 ERRORS 🚨
+===========================================
+
+STEP 1: Open Terminal/Command Prompt
+
+STEP 2: Copy and paste ALL of this:
+
+━━━━━━━━━━ WINDOWS USERS ━━━━━━━━━━
+cd backend
+taskkill /F /IM deno.exe
+timeout /t 3 /nobreak
+deno cache --reload server.tsx
+start "BTM CRM Server" cmd /k "deno run --allow-net --allow-env --allow-read server.tsx"
+timeout /t 10 /nobreak
+curl http://localhost:8000/test-setup
+echo DONE! Wait 30 seconds then refresh your browser.
+pause
+
+━━━━━━━━━━ MAC/LINUX USERS ━━━━━━━━━━
+cd backend && pkill -9 deno && sleep 3 && deno cache --reload server.tsx && deno run --allow-net --allow-env --allow-read server.tsx &
+sleep 10 && curl http://localhost:8000/test-setup
+echo "DONE! Wait 30 seconds then refresh your browser."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 3: Wait for it to finish (about 30 seconds)
+
+STEP 4: Refresh your browser
+
+STEP 5: ✅ NO MORE 404 ERRORS!
+
+===========================================
+
+WHAT THIS DOES:
+1. Navigates to backend folder
+2. Kills old server (version 3.0.0)
+3. Clears Deno cache
+4. Starts NEW server (version 7.0.0)
+5. Tests the server
+6. Shows you it's working!
+
+EXPECTED OUTPUT:
+- Version: "7.0.0-MANAGER-404-FIXED-ALL-ENDPOINTS-WORKING"
+- Server: Running on http://localhost:8000
+- Status: All endpoints working (200 or 503)
+
+If you see version 7.0.0, YOU'RE DONE! ✅
+Just refresh your Manager Portal page.
+
+===========================================

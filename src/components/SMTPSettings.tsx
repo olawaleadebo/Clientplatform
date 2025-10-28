@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Switch } from "./ui/switch";
 import { Mail, Save, TestTube, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner@2.0.3";
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { backendService } from '../utils/backendService';
 
 export function SMTPSettings() {
   const [isLoading, setIsLoading] = useState(true);
@@ -33,25 +33,19 @@ export function SMTPSettings() {
   const loadSMTPSettings = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/smtp-settings`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('SMTP Load Error Response:', errorText);
-        console.error('Status:', response.status);
-        throw new Error(`Failed to load SMTP settings: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
+      const data = await backendService.getSMTPSettings();
+      
       if (data.success && data.settings) {
-        setSmtpConfig(data.settings);
+        // Ensure all fields have default values to prevent controlled/uncontrolled input warning
+        setSmtpConfig({
+          host: data.settings.host || "",
+          port: data.settings.port || "587",
+          secure: data.settings.secure || false,
+          username: data.settings.username || "",
+          password: data.settings.password || "",
+          fromEmail: data.settings.fromEmail || "",
+          fromName: data.settings.fromName || "BTM Travel CRM"
+        });
       }
     } catch (error) {
       console.error('Error loading SMTP settings:', error);
@@ -98,26 +92,8 @@ export function SMTPSettings() {
       }
 
       setIsSaving(true);
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/smtp-settings`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(smtpConfig)
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('SMTP Save Error Response:', errorText);
-        console.error('Status:', response.status);
-        throw new Error(`Failed to save SMTP settings: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
+      const data = await backendService.updateSMTPSettings(smtpConfig);
+      
       if (data.success) {
         toast.success('SMTP settings saved successfully!');
         setTestResult(null); // Clear any previous test results
@@ -166,19 +142,7 @@ export function SMTPSettings() {
       setIsTesting(true);
       setTestResult(null);
       
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/smtp-test`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(smtpConfig)
-        }
-      );
-
-      const data = await response.json();
+      const data = await backendService.testSMTP(smtpConfig);
       
       if (data.success) {
         setTestResult({ success: true, message: data.message || 'Connection successful!' });

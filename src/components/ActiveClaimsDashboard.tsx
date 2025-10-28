@@ -4,8 +4,8 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Phone, User, Clock, RefreshCw, Lock, Trash2 } from 'lucide-react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner@2.0.3';
+import { backendService } from '../utils/backendService';
 
 interface NumberClaim {
   claimedBy: string;
@@ -27,21 +27,8 @@ export function ActiveClaimsDashboard() {
 
   const fetchClaims = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8fff4b3c/number-claims`,
-        {
-          headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch claims');
-      }
-
-      const data = await response.json();
+      const data = await backendService.getNumberClaims();
+      
       if (data.success) {
         setClaims(data.claims || {});
       }

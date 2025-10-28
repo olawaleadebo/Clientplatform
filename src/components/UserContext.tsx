@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { backendService } from '../utils/backendService';
 
 export type Permission = 
   | 'view_team_performance'
@@ -105,23 +106,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const checkAndResetDaily = async () => {
     try {
-      const response = await fetch(
-        `https://${await import('../utils/supabase/info').then(m => m.projectId)}.supabase.co/functions/v1/make-server-8fff4b3c/daily-progress/check-reset`,
-        {
-          headers: {
-            'Authorization': `Bearer ${await import('../utils/supabase/info').then(m => m.publicAnonKey)}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.wasReset) {
-          console.log('[USER CONTEXT] Daily progress was auto-reset');
-          resetDailyProgress();
-        }
+      const data = await backendService.checkDailyReset();
+      if (data.wasReset) {
+        console.log('[USER CONTEXT] Daily progress was auto-reset');
+        resetDailyProgress();
       }
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail - server sync is optional, daily reset is handled client-side
       // Only log if it's not a network error
       if (!(error instanceof TypeError && error.message.includes('fetch'))) {
@@ -147,21 +137,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     
     // Sync to backend (optional - silently fail if server is offline)
     try {
-      await fetch(
-        `https://${await import('../utils/supabase/info').then(m => m.projectId)}.supabase.co/functions/v1/make-server-8fff4b3c/daily-progress/${currentUser.id}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await import('../utils/supabase/info').then(m => m.publicAnonKey)}`
-          },
-          body: JSON.stringify({
-            callsToday: newCount,
-            lastCallTime: new Date().toISOString()
-          })
-        }
+      await backendService.updateDailyProgress(
+        currentUser.id,
+        newCount,
+        new Date().toISOString()
       );
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail - call count is tracked in localStorage
       // Only log non-network errors
       if (!(error instanceof TypeError && error.message.includes('fetch'))) {
@@ -173,7 +154,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string): Promise<boolean> => {
     console.log('[LOGIN] Attempting login for username:', username);
     
-    // First, check users from localStorage (created via Admin panel)
+    // FIRST: Try MongoDB backend (this is where users created via Admin panel are stored)
+    try {
+      console.log('[LOGIN] Checking MongoDB backend...');
+      const response = await backendService.login(username, password);
+      
+      if (response.success && response.user) {
+        console.log('[LOGIN] ✅ MongoDB authentication successful:', response.user.username);
+        setCurrentUser(response.user);
+        localStorage.setItem('btm_current_user', JSON.stringify(response.user));
+        return true;
+      }
+    } catch (error: any) {
+      console.log('[LOGIN] MongoDB check failed (might be offline or user not in DB):', error.message);
+      // Continue to localStorage/demo users if backend is unavailable
+    }
+    
+    // SECOND: Check users from localStorage (legacy support)
     try {
       const usersData = localStorage.getItem('users');
       if (usersData) {
@@ -219,129 +216,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('[LOGIN] Error checking localStorage users:', error);
-    }
-    
-    // Fallback to demo users for backwards compatibility
-    const demoUsers: { [key: string]: { password: string; user: User } } = {
-      'admin': {
-        password: 'admin123',
-        user: {
-          id: '1',
-          username: 'admin',
-          name: 'Admin User',
-          email: 'admin@btmtravel.net',
-          role: 'admin',
-          createdAt: new Date().toISOString()
-        }
-      },
-      'manager': {
-        password: 'manager123',
-        user: {
-          id: '2',
-          username: 'manager',
-          name: 'Manager User',
-          email: 'manager@btmtravel.net',
-          role: 'manager',
-          permissions: [
-            'view_team_performance', 
-            'view_all_agents', 
-            'manage_contacts', 
-            'manage_customers', 
-            'view_customer_details', 
-            'generate_reports', 
-            'export_data',
-            'access_promo_sales',
-            'view_promo_analytics',
-            'access_customer_service',
-            'view_call_history',
-            'view_call_scripts',
-            'make_calls',
-            'view_own_calls'
-          ],
-          createdAt: new Date().toISOString()
-        }
-      },
-      'manager1': {
-        password: 'manager123',
-        user: {
-          id: '4',
-          username: 'manager1',
-          name: 'Adewale Johnson',
-          email: 'adewale.johnson@btmtravel.net',
-          role: 'manager',
-          permissions: [
-            'view_team_performance', 
-            'view_all_agents', 
-            'generate_reports', 
-            'export_data',
-            'view_call_history',
-            'export_call_history',
-            'view_audit_logs'
-          ],
-          createdAt: new Date().toISOString()
-        }
-      },
-      'manager2': {
-        password: 'manager123',
-        user: {
-          id: '5',
-          username: 'manager2',
-          name: 'Chidinma Okafor',
-          email: 'chidinma.okafor@btmtravel.net',
-          role: 'manager',
-          permissions: [
-            'manage_customers', 
-            'view_customer_details', 
-            'edit_customer_notes', 
-            'generate_reports', 
-            'export_data',
-            'access_customer_service',
-            'manage_promotions',
-            'access_promo_sales',
-            'view_call_scripts'
-          ],
-          createdAt: new Date().toISOString()
-        }
-      },
-      'agent': {
-        password: 'agent123',
-        user: {
-          id: '3',
-          username: 'agent',
-          name: 'Agent User',
-          email: 'agent@btmtravel.net',
-          role: 'agent',
-          dailyTarget: 35,
-          createdAt: new Date().toISOString()
-        }
-      }
-    };
-
-    const account = demoUsers[username.toLowerCase()];
-    if (account && account.password === password) {
-      console.log('[LOGIN] Matched demo user:', username);
-      setCurrentUser(account.user);
-      localStorage.setItem('btm_current_user', JSON.stringify(account.user));
-      
-      // Log audit trail
-      try {
-        const auditLogs = JSON.parse(localStorage.getItem('loginAuditLogs') || '[]');
-        auditLogs.push({
-          id: Date.now().toString(),
-          userId: account.user.id,
-          username: account.user.username,
-          name: account.user.name,
-          role: account.user.role,
-          timestamp: new Date().toISOString(),
-          success: true,
-          ipAddress: 'N/A'
-        });
-        localStorage.setItem('loginAuditLogs', JSON.stringify(auditLogs));
-      } catch (e) {
-        console.error('[LOGIN] Failed to log audit:', e);
-      }
-      
-      return true;
     }
 
     console.log('[LOGIN] No match found for username:', username);
