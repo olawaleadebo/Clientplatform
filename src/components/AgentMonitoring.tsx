@@ -635,7 +635,7 @@ export function AgentMonitoring() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="crm" className="flex-1 mt-4 min-h-0">
+              <TabsContent value="crm" className="flex-1 mt-4 min-h-0 overflow-hidden">
                 <div className="h-full rounded-xl border border-purple-100/50 bg-white/60 backdrop-blur-sm overflow-hidden flex flex-col">
                   {(selectedAgent.data?.crmRecords?.length || 0) === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
@@ -645,17 +645,18 @@ export function AgentMonitoring() {
                       <p>No CRM clients assigned</p>
                     </div>
                   ) : (
-                    <div className="overflow-auto flex-1">
-                      <Table>
-                        <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
-                          <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100">
-                            <TableHead className="min-w-[150px]">Name</TableHead>
-                            <TableHead className="min-w-[200px]">Email</TableHead>
-                            <TableHead className="min-w-[150px]">Phone</TableHead>
-                            <TableHead className="min-w-[120px]">Status</TableHead>
-                            <TableHead className="min-w-[120px]">Last Contact</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                    <div className="overflow-x-auto overflow-y-auto flex-1 max-h-[500px]">
+                      <div className="min-w-[900px]">
+                        <Table>
+                          <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
+                            <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100">
+                              <TableHead className="min-w-[150px]">Name</TableHead>
+                              <TableHead className="min-w-[200px]">Email</TableHead>
+                              <TableHead className="min-w-[150px]">Phone</TableHead>
+                              <TableHead className="min-w-[120px]">Status</TableHead>
+                              <TableHead className="min-w-[120px]">Last Contact</TableHead>
+                            </TableRow>
+                          </TableHeader>
                         <TableBody>
                           {(selectedAgent.data?.crmRecords || []).map((record, index) => (
                             <TableRow key={record.id || index} className="hover:bg-blue-50/50 transition-colors duration-200">
@@ -683,13 +684,14 @@ export function AgentMonitoring() {
                             </TableRow>
                           ))}
                         </TableBody>
-                      </Table>
+                        </Table>
+                      </div>
                     </div>
                   )}
                 </div>
               </TabsContent>
 
-              <TabsContent value="customer" className="flex-1 mt-4 min-h-0">
+              <TabsContent value="customer" className="flex-1 mt-4 min-h-0 overflow-hidden">
                 <div className="h-full rounded-xl border border-purple-100/50 bg-white/60 backdrop-blur-sm overflow-hidden flex flex-col">
                   {(selectedAgent.data?.customerRecords?.length || 0) === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
@@ -699,18 +701,19 @@ export function AgentMonitoring() {
                       <p>No customers assigned</p>
                     </div>
                   ) : (
-                    <div className="overflow-auto flex-1">
-                      <Table>
-                        <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
-                          <TableRow className="bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100">
-                            <TableHead className="min-w-[150px]">Name</TableHead>
-                            <TableHead className="min-w-[200px]">Email</TableHead>
-                            <TableHead className="min-w-[150px]">Phone</TableHead>
-                            <TableHead className="min-w-[150px]">Booking</TableHead>
-                            <TableHead className="min-w-[120px]">Status</TableHead>
-                            <TableHead className="min-w-[120px]">Last Contact</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                    <div className="overflow-x-auto overflow-y-auto flex-1 max-h-[500px]">
+                      <div className="min-w-[1100px]">
+                        <Table>
+                          <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
+                            <TableRow className="bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100">
+                              <TableHead className="min-w-[150px]">Name</TableHead>
+                              <TableHead className="min-w-[200px]">Email</TableHead>
+                              <TableHead className="min-w-[150px]">Phone</TableHead>
+                              <TableHead className="min-w-[150px]">Booking</TableHead>
+                              <TableHead className="min-w-[120px]">Status</TableHead>
+                              <TableHead className="min-w-[120px]">Last Contact</TableHead>
+                            </TableRow>
+                          </TableHeader>
                         <TableBody>
                           {(selectedAgent.data?.customerRecords || []).map((record, index) => (
                             <TableRow key={record.id || index} className="hover:bg-purple-50/50 transition-colors duration-200">
@@ -739,7 +742,8 @@ export function AgentMonitoring() {
                             </TableRow>
                           ))}
                         </TableBody>
-                      </Table>
+                        </Table>
+                      </div>
                     </div>
                   )}
                 </div>

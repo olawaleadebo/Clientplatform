@@ -10,7 +10,7 @@ import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Checkbox } from "./ui/checkbox";
-import { Mail, Phone, User, Calendar as CalendarIcon, ShoppingBag, Search, Plus, Pencil, Trash2, Download, Briefcase, UserPlus, Upload, PhoneCall, ChevronDown, Clock, Tag, TrendingUp, Archive, ArchiveRestore, Eye, AlertCircle, CheckCircle, XCircle, FileText, FileDown, Presentation } from "lucide-react";
+import { Mail, Phone, User, Calendar as CalendarIcon, ShoppingBag, Search, Plus, Pencil, Trash2, Download, Briefcase, UserPlus, Upload, PhoneCall, ChevronDown, Clock, Tag, TrendingUp, Archive, ArchiveRestore, Eye, AlertCircle, CheckCircle, XCircle, FileText, FileDown, Presentation, Headphones } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { DialogFooter } from "./ui/dialog";
@@ -457,9 +457,10 @@ export function CustomerService() {
       setCustomers(updatedCustomers);
       saveCustomersToBackend(updatedCustomers);
       
-      toast.success("Response sent to customer and notes updated!");
+      toast.success("Note added! Remember to 'Complete Interaction' when done with this customer.", { duration: 4000 });
       setResponseNote("");
-      setIsDialogOpen(false);
+      // Do NOT close dialog automatically - agent may need to continue working
+      // Dialog will close when agent clicks "Complete Interaction" button
     }
   };
 
@@ -2060,7 +2061,7 @@ export function CustomerService() {
                 </div>
               </div>
               <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg shadow-purple-500/30">
-                <HeadphonesIcon className="w-6 h-6 text-white" />
+                <Headphones className="w-6 h-6 text-white" />
               </div>
             </div>
           </CardContent>
@@ -2357,7 +2358,10 @@ export function CustomerService() {
 
       <DraggableDialog
         isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
+        onClose={() => {
+          setIsDialogOpen(false);
+          toast.info("⚠️ Reminder: If you assisted this customer, mark it complete using 'Complete Interaction' button!", { duration: 5000 });
+        }}
         title={selectedCustomer ? `${selectedCustomer.name} - Customer Details` : "Customer Details"}
         defaultWidth={900}
         defaultHeight={700}

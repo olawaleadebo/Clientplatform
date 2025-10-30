@@ -583,4 +583,42 @@ export const backendService = {
   async getAgentMonitoringDetails(agentId: string) {
     return backendFetch(`/agent-monitoring/agent/${agentId}`);
   },
+
+  // Call Progress and Recycling
+  async getCallProgress() {
+    return backendFetch('/call-progress');
+  },
+
+  async recycleUncompletedCalls() {
+    return backendFetch('/call-progress/recycle', {
+      method: 'POST',
+    });
+  },
+
+  async archiveCompletedCalls() {
+    return backendFetch('/call-progress/archive-completed', {
+      method: 'POST',
+    });
+  },
+
+  async recycleAgentNumbers(agentUsername: string, type: 'client' | 'customer') {
+    return backendFetch('/call-progress/recycle-agent', {
+      method: 'POST',
+      body: JSON.stringify({ agentUsername, type }),
+    });
+  },
+
+  async updateCustomerData(customers: any[]) {
+    return backendFetch('/customers/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify({ customers }),
+    });
+  },
+
+  async updateClientData(clients: any[]) {
+    return backendFetch('/database/clients/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify({ clients }),
+    });
+  },
 };

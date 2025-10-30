@@ -9,13 +9,13 @@ const corsHeaders = {
 };
 
 // Server version and startup timestamp
-const SERVER_VERSION = '9.1.0-MONGODB-AUTO-INIT';
+const SERVER_VERSION = '9.2.0-CALL-TRACKER';
 const SERVER_STARTED = new Date().toISOString();
 console.log('\n\n\n');
 console.log('🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢');
 console.log('🟢                                                         🟢');
 console.log('🟢  BTM TRAVEL CRM SERVER - FULLY OPERATIONAL! ✅          🟢');
-console.log('🟢  VERSION: 9.1.0 - MONGODB AUTO-INIT!                   🟢');
+console.log('🟢  VERSION: 9.2.0 - CALL TRACKER INTEGRATED!             🟢');
 console.log('🟢                                                         🟢');
 console.log('🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢');
 console.log('');
@@ -156,6 +156,11 @@ console.log('🔗 Manager Operations: ✅ ALL LOADED');
 console.log('   - GET    /team-performance (Full team metrics)');
 console.log('   - GET    /agent-monitoring/overview');
 console.log('   - GET    /agent-monitoring/agent/:id');
+console.log('🔗 Call Progress & Recycling: ✅ NEW!');
+console.log('   - GET    /call-progress');
+console.log('   - POST   /call-progress/recycle');
+console.log('   - POST   /call-progress/archive-completed');
+console.log('   - POST   /call-progress/recycle-agent');
 console.log('🔗 Customer Endpoints: ✅ LOADED');
 console.log('   - GET    /database/customers/assigned/:id');
 console.log('   - DELETE /customers/clear');
@@ -3705,6 +3710,328 @@ Deno.serve(async (req) => {
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // ==================== CALL PROGRESS & RECYCLING ====================
+    // Get call progress for all agents
+    if (path === '/call-progress' && req.method === 'GET') {
+      console.log('[CALL PROGRESS] Getting call progress for all agents');
+      
+      const mongoCheck = await checkMongoReady();
+      if (mongoCheck) {
+        return mongoCheck;
+      }
+      
+      try {
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        const usersCollection = await getCollection(Collections.USERS);
+        
+        // Get all assignments for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+        
+        const assignments = await assignmentsCollection.find({
+          assignedAt: { $gte: todayStr }
+        }).toArray();
+        
+        // Get all agents
+        const agents = await usersCollection.find({ role: 'agent' }).toArray();
+        
+        // Calculate progress for each agent
+        const progressData = await Promise.all(agents.map(async (agent) => {
+          const agentAssignments = assignments.filter(a => a.agentId === agent.id);
+          
+          const clientAssignments = agentAssignments.filter(a => a.type === 'client');
+          const customerAssignments = agentAssignments.filter(a => a.type === 'customer');
+          
+          const completedClients = clientAssignments.filter(a => a.called === true);
+          const completedCustomers = customerAssignments.filter(a => a.called === true);
+          
+          const uncompletedClients = clientAssignments.filter(a => !a.called);
+          const uncompletedCustomers = customerAssignments.filter(a => !a.called);
+          
+          const results = [];
+          
+          // Add client progress if any
+          if (clientAssignments.length > 0) {
+            results.push({
+              agentUsername: agent.username,
+              agentName: agent.name || agent.username,
+              type: 'client',
+              totalAssigned: clientAssignments.length,
+              completed: completedClients.length,
+              uncompleted: uncompletedClients.length,
+              completedNumbers: completedClients.map(a => a.phoneNumber),
+              uncompletedNumbers: uncompletedClients.map(a => a.phoneNumber),
+              assignedDate: clientAssignments[0]?.assignedAt || new Date().toISOString()
+            });
+          }
+          
+          // Add customer progress if any
+          if (customerAssignments.length > 0) {
+            results.push({
+              agentUsername: agent.username,
+              agentName: agent.name || agent.username,
+              type: 'customer',
+              totalAssigned: customerAssignments.length,
+              completed: completedCustomers.length,
+              uncompleted: uncompletedCustomers.length,
+              completedNumbers: completedCustomers.map(a => a.phoneNumber),
+              uncompletedNumbers: uncompletedCustomers.map(a => a.phoneNumber),
+              assignedDate: customerAssignments[0]?.assignedAt || new Date().toISOString()
+            });
+          }
+          
+          return results;
+        }));
+        
+        // Flatten the results
+        const flatProgress = progressData.flat();
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            progress: convertMongoDocs(flatProgress)
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[CALL PROGRESS] Error:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message, progress: [] }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
+    // Recycle uncompleted calls
+    if (path === '/call-progress/recycle' && req.method === 'POST') {
+      console.log('[CALL PROGRESS] Recycling uncompleted calls');
+      
+      const mongoCheck = await checkMongoReady();
+      if (mongoCheck) {
+        return mongoCheck;
+      }
+      
+      try {
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        const clientsCollection = await getCollection(Collections.NUMBERS_DATABASE);
+        const customersCollection = await getCollection(Collections.CUSTOMERS_DATABASE);
+        
+        // Find all uncompleted assignments
+        const uncompletedAssignments = await assignmentsCollection.find({
+          called: { $ne: true }
+        }).toArray();
+        
+        let recycled = 0;
+        
+        for (const assignment of uncompletedAssignments) {
+          if (assignment.type === 'client') {
+            // Return client to database
+            const client = {
+              id: assignment.recordId || assignment.id,
+              phoneNumber: assignment.phoneNumber,
+              name: assignment.name || 'Unknown',
+              recycledAt: new Date().toISOString()
+            };
+            
+            await clientsCollection.updateOne(
+              { phoneNumber: assignment.phoneNumber },
+              { $set: client },
+              { upsert: true }
+            );
+          } else if (assignment.type === 'customer') {
+            // Return customer to database
+            const customer = {
+              id: assignment.recordId || assignment.id,
+              phoneNumber: assignment.phoneNumber,
+              name: assignment.name || 'Unknown',
+              recycledAt: new Date().toISOString()
+            };
+            
+            await customersCollection.updateOne(
+              { phoneNumber: assignment.phoneNumber },
+              { $set: customer },
+              { upsert: true }
+            );
+          }
+          
+          recycled++;
+        }
+        
+        // Delete the uncompleted assignments
+        await assignmentsCollection.deleteMany({
+          called: { $ne: true }
+        });
+        
+        console.log(`[CALL PROGRESS] Recycled ${recycled} uncompleted calls`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            recycled,
+            message: `Successfully recycled ${recycled} uncompleted calls back to the database`
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[CALL PROGRESS] Recycle error:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
+    // Archive completed calls
+    if (path === '/call-progress/archive-completed' && req.method === 'POST') {
+      console.log('[CALL PROGRESS] Archiving completed calls');
+      
+      const mongoCheck = await checkMongoReady();
+      if (mongoCheck) {
+        return mongoCheck;
+      }
+      
+      try {
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        const archiveCollection = await getCollection(Collections.ARCHIVE);
+        
+        // Find all completed assignments
+        const completedAssignments = await assignmentsCollection.find({
+          called: true
+        }).toArray();
+        
+        if (completedAssignments.length > 0) {
+          // Archive them
+          const archiveRecords = completedAssignments.map(assignment => ({
+            ...assignment,
+            entityType: assignment.type === 'client' ? 'client' : 'customer',
+            archivedAt: new Date().toISOString(),
+            archivedBy: 'system-auto'
+          }));
+          
+          await archiveCollection.insertMany(archiveRecords);
+          
+          // Delete from assignments
+          await assignmentsCollection.deleteMany({
+            called: true
+          });
+          
+          console.log(`[CALL PROGRESS] Archived ${completedAssignments.length} completed calls`);
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            archived: completedAssignments.length,
+            message: `Successfully archived ${completedAssignments.length} completed calls`
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[CALL PROGRESS] Archive error:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
+    // Recycle specific agent's numbers
+    if (path === '/call-progress/recycle-agent' && req.method === 'POST') {
+      const body = await req.json();
+      const { agentUsername, type } = body;
+      
+      console.log(`[CALL PROGRESS] Recycling ${type} numbers for agent: ${agentUsername}`);
+      
+      const mongoCheck = await checkMongoReady();
+      if (mongoCheck) {
+        return mongoCheck;
+      }
+      
+      try {
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        const usersCollection = await getCollection(Collections.USERS);
+        const clientsCollection = await getCollection(Collections.NUMBERS_DATABASE);
+        const customersCollection = await getCollection(Collections.CUSTOMERS_DATABASE);
+        
+        // Find agent
+        const agent = await usersCollection.findOne({ username: agentUsername });
+        if (!agent) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Agent not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Find uncompleted assignments for this agent and type
+        const uncompletedAssignments = await assignmentsCollection.find({
+          agentId: agent.id,
+          type,
+          called: { $ne: true }
+        }).toArray();
+        
+        let recycled = 0;
+        
+        for (const assignment of uncompletedAssignments) {
+          if (type === 'client') {
+            const client = {
+              id: assignment.recordId || assignment.id,
+              phoneNumber: assignment.phoneNumber,
+              name: assignment.name || 'Unknown',
+              recycledAt: new Date().toISOString(),
+              recycledFrom: agentUsername
+            };
+            
+            await clientsCollection.updateOne(
+              { phoneNumber: assignment.phoneNumber },
+              { $set: client },
+              { upsert: true }
+            );
+          } else if (type === 'customer') {
+            const customer = {
+              id: assignment.recordId || assignment.id,
+              phoneNumber: assignment.phoneNumber,
+              name: assignment.name || 'Unknown',
+              recycledAt: new Date().toISOString(),
+              recycledFrom: agentUsername
+            };
+            
+            await customersCollection.updateOne(
+              { phoneNumber: assignment.phoneNumber },
+              { $set: customer },
+              { upsert: true }
+            );
+          }
+          
+          recycled++;
+        }
+        
+        // Delete the assignments
+        await assignmentsCollection.deleteMany({
+          agentId: agent.id,
+          type,
+          called: { $ne: true }
+        });
+        
+        console.log(`[CALL PROGRESS] Recycled ${recycled} ${type} numbers from ${agentUsername}`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            recycled,
+            message: `Recycled ${recycled} ${type} numbers from ${agentUsername}`
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[CALL PROGRESS] Recycle agent error:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // ==================== NOT FOUND ====================

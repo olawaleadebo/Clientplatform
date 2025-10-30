@@ -1,0 +1,42 @@
+========================================
+  FIX CALL TRACKER 404 ERROR
+========================================
+
+THE PROBLEM:
+  Backend server is running old code
+
+THE FIX:
+  Restart the backend server
+
+========================================
+
+INSTRUCTIONS:
+-------------
+
+1. Stop backend:
+   Press Ctrl+C in backend terminal
+
+2. Start backend:
+   cd backend
+   deno run --allow-all server.tsx
+
+3. Look for:
+   "VERSION: 9.2.0 - CALL TRACKER INTEGRATED!"
+
+4. Done! 
+   Call Progress tab should work now
+
+========================================
+
+QUICK TEST:
+-----------
+
+1. Refresh browser (Ctrl+F5)
+2. Login as Manager  
+3. Go to Manager Portal
+4. Click "Call Progress" tab
+5. Should load without errors ✅
+
+========================================
+
+THAT'S IT!

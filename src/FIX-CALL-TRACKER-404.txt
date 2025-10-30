@@ -1,0 +1,60 @@
+=====================================================
+   QUICK FIX FOR CALL TRACKER 404 ERROR
+=====================================================
+
+ERROR: 
+  Server responded with 404: path="/call-progress"
+
+CAUSE: 
+  Backend server is running old code without new endpoints
+
+FIX: 
+  RESTART THE BACKEND SERVER
+
+=====================================================
+
+WINDOWS USERS:
+--------------
+1. Press Ctrl+C in backend terminal (stop old server)
+2. Run this command:
+   cd backend && deno run --allow-all server.tsx
+
+OR double-click:
+   backend\RESTART-FOR-CALL-TRACKER.bat
+
+=====================================================
+
+MAC/LINUX USERS:
+----------------
+1. Press Ctrl+C in backend terminal (stop old server)  
+2. Run this command:
+   cd backend && deno run --allow-all server.tsx
+
+OR run:
+   cd backend && ./RESTART-FOR-CALL-TRACKER.sh
+
+=====================================================
+
+VERIFY IT WORKED:
+-----------------
+Look for this in the startup message:
+
+  VERSION: 9.2.0 - CALL TRACKER INTEGRATED!
+  
+And this:
+
+  🔗 Call Progress & Recycling: ✅ NEW!
+     - GET    /call-progress
+     - POST   /call-progress/recycle
+
+=====================================================
+
+THEN:
+-----
+1. Go back to your app
+2. Refresh the page (Ctrl+F5)
+3. Login as Manager
+4. Go to Manager Portal → Call Progress
+5. Should work now! ✅
+
+=====================================================

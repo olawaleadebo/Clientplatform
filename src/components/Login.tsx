@@ -139,9 +139,27 @@ export function Login({ onBack }: LoginProps = {}) {
 
       {/* Main Content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-8 lg:p-12">
-        <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center">
+        <div className="w-full max-w-6xl space-y-8">
           
-          {/* Left Side - Login Form */}
+          {/* Header - Spans Both Columns */}
+          <motion.div
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-center"
+          >
+            <h2 className="text-4xl lg:text-5xl font-black text-white mb-4 bg-gradient-to-r from-blue-200 via-purple-200 to-violet-200 bg-clip-text text-transparent uppercase">
+              BTMTRAVEL CRM PLATFORM
+            </h2>
+            <p className="text-white/70">
+              Everything you need to manage your client relationships
+            </p>
+          </motion.div>
+
+          {/* Two Column Grid */}
+          <div className="grid lg:grid-cols-2 gap-8 items-start">
+          
+            {/* Left Side - Login Form */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
@@ -238,43 +256,6 @@ export function Login({ onBack }: LoginProps = {}) {
                   <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                 </Button>
               </form>
-
-              {/* Initialize Database Button */}
-              <Button
-                type="button"
-                onClick={handleInitialize}
-                variant="outline"
-                className="w-full h-12 bg-white/5 border-white/30 text-white hover:bg-white/10 hover:border-white/50 rounded-xl transition-all duration-300"
-                disabled={isLoading || isInitializing}
-              >
-                {isInitializing ? "Initializing Database..." : "🔧 Initialize Database (First Time)"}
-              </Button>
-
-              {/* Demo Credentials */}
-              {(
-                <Alert className="mt-4 bg-white/5 border-white/20 backdrop-blur-xl">
-                <AlertDescription>
-                  <div className="space-y-2">
-                    <p className="font-semibold text-white flex items-center gap-2">
-                      <Shield className="w-4 h-4" />
-                      First Time Setup:
-                    </p>
-                    <div className="text-sm text-white/80 space-y-1 ml-6">
-                      <p>1. Just try logging in with: <strong className="text-blue-300">admin / admin123</strong></p>
-                      <p>2. Database will auto-initialize on first login! ✨</p>
-                      <p>3. Create more users in Admin panel after login</p>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="mt-6 text-center">
-              <p className="text-white/60 text-sm">
-                BTMTravel © 2025 • Client Management Platform
-              </p>
             </div>
           </motion.div>
 
@@ -285,19 +266,7 @@ export function Login({ onBack }: LoginProps = {}) {
             transition={{ duration: 0.8 }}
             className="hidden lg:block"
           >
-            <div className="space-y-6">
-              {/* Header */}
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-black text-white mb-4 bg-gradient-to-r from-blue-200 via-purple-200 to-violet-200 bg-clip-text text-transparent uppercase">
-                  BTMTRAVEL CRM PLATFORM
-                </h2>
-                <p className="text-sm text-white/70">
-                  Everything you need to manage your client relationships
-                </p>
-              </div>
-
-              {/* Feature Cards */}
-              <div className="space-y-4">
+            <div className="space-y-4">
                 {/* Feature 1 */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -409,37 +378,36 @@ export function Login({ onBack }: LoginProps = {}) {
                     </div>
                   </div>
                 </motion.div>
-              </div>
 
               {/* Stats */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.6 }}
-                className="relative mt-8 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6"
+                className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4"
               >
-                <div className="grid grid-cols-3 gap-6 text-center">
+                <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <div className="text-4xl font-black text-white mb-1 bg-gradient-to-r from-blue-200 to-purple-200 bg-clip-text text-transparent">
+                    <div className="text-2xl font-black text-white mb-0.5">
                       30+
                     </div>
-                    <div className="text-xs text-white/70 uppercase tracking-wider">
+                    <div className="text-xs text-white/70 uppercase tracking-wider font-semibold">
                       Daily Calls
                     </div>
                   </div>
                   <div>
-                    <div className="text-4xl font-black text-white mb-1 bg-gradient-to-r from-purple-200 to-violet-200 bg-clip-text text-transparent">
+                    <div className="text-2xl font-black text-white mb-0.5">
                       24/7
                     </div>
-                    <div className="text-xs text-white/70 uppercase tracking-wider">
+                    <div className="text-xs text-white/70 uppercase tracking-wider font-semibold">
                       Support
                     </div>
                   </div>
                   <div>
-                    <div className="text-4xl font-black text-white mb-1 bg-gradient-to-r from-violet-200 to-blue-200 bg-clip-text text-transparent">
+                    <div className="text-2xl font-black text-white mb-0.5">
                       100%
                     </div>
-                    <div className="text-xs text-white/70 uppercase tracking-wider">
+                    <div className="text-xs text-white/70 uppercase tracking-wider font-semibold">
                       Secure
                     </div>
                   </div>
@@ -448,6 +416,19 @@ export function Login({ onBack }: LoginProps = {}) {
             </div>
           </motion.div>
 
+          </div>
+
+          {/* Footer - Centered Below Both Columns */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.8 }}
+            className="text-center mt-8"
+          >
+            <p className="text-white/60 text-sm">
+              BTMTravel © 2025 • Client Management Platform
+            </p>
+          </motion.div>
         </div>
       </div>
     </div>
