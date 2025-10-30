@@ -1641,26 +1641,68 @@ Deno.serve(async (req) => {
       const body = await req.json();
       const { clientIds, agentId, filters } = body;
       
+      console.log('[DATABASE] Client assignment request:', { clientIds: clientIds?.length, agentId, filters });
+      
       const numbersCollection = await getCollection(Collections.NUMBERS_DATABASE);
       const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
       
       let numbersToAssign;
       
       if (filters && (filters.customerType || filters.airplane)) {
-        // Filter based query
-        const query: any = { status: 'available' };
+        // Filter based query - find unassigned numbers
+        const query: any = {
+          $or: [
+            { status: 'available' },
+            { status: { $exists: false } },
+            { status: null },
+            { status: '' }
+          ],
+          $and: [
+            {
+              $or: [
+                { assignedTo: { $exists: false } },
+                { assignedTo: null },
+                { assignedTo: '' }
+              ]
+            }
+          ]
+        };
+        
         if (filters.customerType) query.customerType = filters.customerType;
         if (filters.airplane) query.airplane = filters.airplane;
+        
+        console.log('[DATABASE] Finding numbers with query:', JSON.stringify(query));
         
         numbersToAssign = await numbersCollection
           .find(query)
           .limit(filters.count || 100)
           .toArray();
+          
+        console.log('[DATABASE] Found numbers:', numbersToAssign.length);
       } else if (clientIds && clientIds.length > 0) {
-        // Specific IDs
+        // Specific IDs - find unassigned numbers
         numbersToAssign = await numbersCollection
-          .find({ id: { $in: clientIds }, status: 'available' })
+          .find({ 
+            id: { $in: clientIds },
+            $or: [
+              { status: 'available' },
+              { status: { $exists: false } },
+              { status: null },
+              { status: '' }
+            ],
+            $and: [
+              {
+                $or: [
+                  { assignedTo: { $exists: false } },
+                  { assignedTo: null },
+                  { assignedTo: '' }
+                ]
+              }
+            ]
+          })
           .toArray();
+          
+        console.log('[DATABASE] Found specific numbers:', numbersToAssign.length, 'of', clientIds.length, 'requested');
       } else {
         return new Response(
           JSON.stringify({ success: false, error: 'No clients or filters specified' }),
@@ -1669,8 +1711,30 @@ Deno.serve(async (req) => {
       }
       
       if (numbersToAssign.length === 0) {
+        console.log('[DATABASE] ❌ No available numbers found matching criteria');
+        
+        // Check if there are ANY numbers in the database
+        const totalNumbers = await numbersCollection.countDocuments({});
+        const assignedNumbers = await numbersCollection.countDocuments({ 
+          assignedTo: { $exists: true, $ne: null, $ne: '' }
+        });
+        
         return new Response(
-          JSON.stringify({ success: false, error: 'No available numbers match criteria' }),
+          JSON.stringify({ 
+            success: false, 
+            error: 'No available numbers match criteria',
+            debug: {
+              totalInDatabase: totalNumbers,
+              alreadyAssigned: assignedNumbers,
+              available: totalNumbers - assignedNumbers,
+              filters: filters || 'specific IDs',
+              suggestion: totalNumbers === 0 
+                ? 'No numbers in database. Please upload numbers first.'
+                : assignedNumbers === totalNumbers
+                  ? 'All numbers are already assigned. Please import more numbers or unassign existing ones.'
+                  : 'No numbers match your filter criteria. Try different filters.'
+            }
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -1723,6 +1787,42 @@ Deno.serve(async (req) => {
       await collection.deleteMany({ id: { $in: body.ids || [] } });
       return new Response(
         JSON.stringify({ success: true, deleted: body.ids?.length || 0 }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Migration endpoint to fix client/number status fields
+    if (path === '/database/clients/migrate' && req.method === 'POST') {
+      console.log('[DATABASE] Running client/number migration...');
+      const numbersCollection = await getCollection(Collections.NUMBERS_DATABASE);
+      
+      // Update all numbers that don't have proper status or assignedTo fields
+      const result = await numbersCollection.updateMany(
+        { 
+          $or: [
+            { status: { $exists: false } },
+            { status: null },
+            { status: undefined },
+            { assignedTo: undefined }
+          ]
+        },
+        { 
+          $set: { 
+            status: 'available',
+            assignedTo: null,
+            assignedAt: null
+          } 
+        }
+      );
+      
+      console.log('[MIGRATION] Fixed client/number records:', result.modifiedCount);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Fixed ${result.modifiedCount} client/number records`,
+          modifiedCount: result.modifiedCount
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

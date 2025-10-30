@@ -123,11 +123,41 @@ export function NumberBankManager() {
         setAssignCount("");
         loadData();
       } else {
-        toast.error(response.error || "Failed to assign numbers");
+        // Show detailed error message with debug info if available
+        const errorMsg = response.error || "Failed to assign numbers";
+        const debugInfo = response.debug;
+        
+        if (debugInfo) {
+          toast.error(errorMsg, {
+            description: debugInfo.suggestion || `Available: ${debugInfo.available || 0}, Total: ${debugInfo.totalInDatabase || 0}`,
+            duration: 5000
+          });
+        } else {
+          toast.error(errorMsg);
+        }
+        
+        // If it's a "no available numbers" error, suggest fixing the database
+        if (errorMsg.includes("No available numbers")) {
+          setTimeout(() => {
+            toast.info("Try clicking 'Fix Database' in the Database tab to resolve assignment issues", {
+              duration: 7000
+            });
+          }, 1500);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Assignment error:", error);
-      toast.error("Failed to assign numbers");
+      const errorMsg = error.message || "Failed to assign numbers";
+      toast.error(errorMsg);
+      
+      // Show helpful hint if it's a 400 error
+      if (error.message?.includes("400")) {
+        setTimeout(() => {
+          toast.info("Visit the Database tab and click 'Fix Database' to resolve this issue", {
+            duration: 7000
+          });
+        }, 1500);
+      }
     }
   };
 

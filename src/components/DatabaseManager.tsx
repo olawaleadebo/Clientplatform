@@ -377,6 +377,36 @@ export function DatabaseManager() {
     }
   };
 
+  const handleFixDatabase = async () => {
+    try {
+      toast.info('Running database migration...', { duration: 2000 });
+      
+      // Fix clients/numbers
+      const clientsResponse = await fetch('http://localhost:8000/database/clients/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const clientsData = await clientsResponse.json();
+      
+      // Fix customers
+      const customersResponse = await fetch('http://localhost:8000/database/customers/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const customersData = await customersResponse.json();
+      
+      if (clientsData.success && customersData.success) {
+        toast.success(`Fixed ${clientsData.modifiedCount} client records and ${customersData.modifiedCount} customer records!`);
+        await loadDatabaseStats();
+      } else {
+        throw new Error('Migration failed');
+      }
+    } catch (error) {
+      console.error('Failed to fix database:', error);
+      toast.error('Failed to fix database. Please check your connection.');
+    }
+  };
+
   const utilizationRate = stats.totalClients + stats.totalCustomers > 0 
     ? Math.round(((stats.assignedClients + stats.assignedCustomers) / (stats.totalClients + stats.totalCustomers)) * 100)
     : 0;
@@ -422,6 +452,27 @@ export function DatabaseManager() {
           </Button>
         </div>
       </div>
+
+      {/* Fix Database Alert (shows if assignment error might occur) */}
+      <Alert className="border-0 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 shadow-lg">
+        <Sparkles className="w-4 h-4 text-amber-600" />
+        <AlertDescription className="flex items-center justify-between">
+          <div>
+            <p className="text-amber-900 mb-1">Getting "No available numbers match criteria" error?</p>
+            <p className="text-sm text-amber-700">
+              Click "Fix Database" to resolve assignment issues caused by missing status fields.
+            </p>
+          </div>
+          <Button 
+            onClick={handleFixDatabase}
+            size="sm"
+            className="ml-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-md transition-all duration-300 hover:scale-105"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Fix Database
+          </Button>
+        </AlertDescription>
+      </Alert>
 
       {/* Summary Stats Cards with Glassmorphism */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
