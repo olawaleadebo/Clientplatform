@@ -1390,12 +1390,13 @@ Deno.serve(async (req) => {
           const totalCustomerAssignments = await customersCollection.countDocuments({ 
             assignedTo: agent.id 
           });
-          // Count customers with notes as "completed" interactions
+          // Count customers with interactionCompleted flag OR notes as "completed" interactions
+          // This supports both new tracking method and legacy data
           const customersWithNotes = await customersCollection.find({ 
             assignedTo: agent.id
           }).toArray();
           const completedCustomerAssignments = customersWithNotes.filter(c => 
-            c.notes && c.notes.length > 0
+            c.interactionCompleted === true || (c.notes && c.notes.length > 0)
           ).length;
           
           // Calculate totals
@@ -3576,6 +3577,122 @@ Deno.serve(async (req) => {
         );
       } catch (error: any) {
         console.error('[ADMIN] Error resetting database:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Reset all counters - NEW ENDPOINT
+    if (path === '/reset-all-counters' && req.method === 'POST') {
+      console.log('[ADMIN] RESET ALL COUNTERS requested');
+      
+      try {
+        const body = await req.json();
+        const { 
+          resetDailyProgress = true, 
+          resetCallLogs = false, 
+          resetNumberClaims = true,
+          resetAssignmentCounters = true 
+        } = body || {};
+        
+        let countersReset = 0;
+        const resetDetails: any = {};
+        
+        // 1. Reset Daily Progress (most important)
+        if (resetDailyProgress) {
+          const progressCollection = await getCollection(Collections.DAILY_PROGRESS);
+          
+          // Reset all user progress to zero
+          const result = await progressCollection.updateOne(
+            { type: 'daily' },
+            {
+              $set: {
+                userProgress: {},
+                lastReset: new Date().toISOString().split('T')[0]
+              }
+            },
+            { upsert: true }
+          );
+          
+          countersReset++;
+          resetDetails.dailyProgress = 'All user daily progress reset to zero';
+          console.log('[ADMIN] ✅ Daily progress counters reset');
+        }
+        
+        // 2. Reset Number Claims
+        if (resetNumberClaims) {
+          const claimsCollection = await getCollection(Collections.NUMBER_CLAIMS);
+          const result = await claimsCollection.deleteMany({});
+          countersReset++;
+          resetDetails.numberClaims = `${result.deletedCount || 0} number claims cleared`;
+          console.log(`[ADMIN] ✅ Number claims reset (${result.deletedCount || 0} removed)`);
+        }
+        
+        // 3. Reset Assignment Counters (reset callsMade, successfulCalls, missedCalls, AND called status in assignments)
+        if (resetAssignmentCounters) {
+          const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+          const result = await assignmentsCollection.updateMany(
+            {},
+            {
+              $set: {
+                callsMade: 0,
+                successfulCalls: 0,
+                missedCalls: 0,
+                completedCalls: 0,
+                called: false  // CRITICAL: Reset completion status so Agent Monitoring shows 0
+              }
+            }
+          );
+          countersReset++;
+          resetDetails.assignments = `${result.modifiedCount || 0} assignment counters reset`;
+          console.log(`[ADMIN] ✅ Assignment counters reset (${result.modifiedCount || 0} updated)`);
+        }
+        
+        // 4. Optionally clear Call Logs (usually not needed, but available)
+        if (resetCallLogs) {
+          const callLogsCollection = await getCollection(Collections.CALL_LOGS);
+          const result = await callLogsCollection.deleteMany({});
+          countersReset++;
+          resetDetails.callLogs = `${result.deletedCount || 0} call logs cleared`;
+          console.log(`[ADMIN] ✅ Call logs cleared (${result.deletedCount || 0} removed)`);
+        }
+        
+        // 5. Reset completion tracking in Numbers and Customers databases
+        const numbersCollection = await getCollection(Collections.NUMBERS_DATABASE);
+        const customersCollection = await getCollection(Collections.CUSTOMERS_DATABASE);
+        
+        await numbersCollection.updateMany(
+          {},
+          { $unset: { completedCalls: "", lastCallDate: "", interactionCompleted: "" } }
+        );
+        
+        // For customers, reset completion flag but preserve notes (historical data)
+        await customersCollection.updateMany(
+          {},
+          { 
+            $unset: { completedCalls: "", lastCallDate: "" },
+            $set: { interactionCompleted: false }  // Reset completion flag while preserving notes
+          }
+        );
+        
+        console.log('[ADMIN] ✅ Completion tracking reset in databases (notes preserved)');
+        
+        console.log(`[ADMIN] Counter reset complete. ${countersReset} systems reset.`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            countersReset,
+            resetDetails,
+            message: `Successfully reset ${countersReset} counter systems!`,
+            timestamp: new Date().toISOString()
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[ADMIN] Error resetting counters:', error);
         return new Response(
           JSON.stringify({ success: false, error: error.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

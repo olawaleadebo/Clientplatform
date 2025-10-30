@@ -30,6 +30,7 @@ import { ConnectionStatus } from './ConnectionStatus';
 import { UserDebugPanel } from './UserDebugPanel';
 import { SystemInitializer } from './SystemInitializer';
 import { BackendDiagnostics } from './BackendDiagnostics';
+import { CounterResetManager } from './CounterResetManager';
 
 import { Permission } from './UserContext';
 
@@ -112,7 +113,7 @@ export function AdminSettings() {
   });
   
   // Sidebar navigation states
-  const [activeSection, setActiveSection] = useState<'users' | 'permissions' | 'audit' | 'email' | 'smtp' | '3cx' | 'calls' | 'scripts' | 'promotions' | 'daily-progress' | 'database' | 'archive' | 'agent-monitoring' | 'user-debug' | 'system-init'>('system-init');
+  const [activeSection, setActiveSection] = useState<'users' | 'permissions' | 'audit' | 'email' | 'smtp' | '3cx' | 'calls' | 'scripts' | 'promotions' | 'daily-progress' | 'database' | 'archive' | 'agent-monitoring' | 'user-debug' | 'system-init' | 'counter-reset'>('system-init');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   const [newUser, setNewUser] = useState({
@@ -1035,6 +1036,7 @@ export function AdminSettings() {
     { id: 'system-init' as const, label: '🚀 System Setup', icon: Database },
     { id: 'users' as const, label: 'Users', icon: Users },
     { id: 'daily-progress' as const, label: 'Daily Progress', icon: Target },
+    { id: 'counter-reset' as const, label: '🔄 Reset Counters', icon: Settings },
     { id: 'database' as const, label: 'Assign Calls/Database', icon: Database },
     { id: 'mongodb-status' as const, label: 'MongoDB Status', icon: Database },
     { id: 'agent-monitoring' as const, label: 'Agent Monitoring', icon: Eye },
@@ -1741,6 +1743,11 @@ export function AdminSettings() {
           {/* Daily Progress Section */}
           {activeSection === 'daily-progress' && (
             <DailyProgressManager />
+          )}
+
+          {/* Counter Reset Section */}
+          {activeSection === 'counter-reset' && (
+            <CounterResetManager />
           )}
 
           {/* Agent Monitoring Section */}

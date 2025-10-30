@@ -621,4 +621,17 @@ export const backendService = {
       body: JSON.stringify({ clients }),
     });
   },
+
+  // Reset all counters across the system
+  async resetAllCounters(options?: {
+    resetDailyProgress?: boolean;
+    resetCallLogs?: boolean;
+    resetNumberClaims?: boolean;
+    resetAssignmentCounters?: boolean;
+  }) {
+    return backendFetch('/reset-all-counters', {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+  },
 };
