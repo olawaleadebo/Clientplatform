@@ -50,6 +50,7 @@ export function AdminSettings() {
   const { currentUser, isAdmin } = useUser();
   const [globalTarget, setGlobalTarget] = useState(30);
   const [users, setUsers] = useState<UserSettings[]>([]);
+  const [backendAvailable, setBackendAvailable] = useState(true);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserSettings | null>(null);
@@ -133,51 +134,22 @@ export function AdminSettings() {
 
   const loadSettings = async () => {
     try {
-      // Try to load from backend first
+      // Load from MongoDB backend - SINGLE SOURCE OF TRUTH
       const data = await backendService.getAdminSettings();
       if (data.success && data.settings) {
         setGlobalTarget(data.settings.globalTarget || 30);
         // Filter out any null/undefined users from the database
         const validUsers = (data.settings.users || []).filter((u: any) => u != null && u.id && u.username);
         setUsers(validUsers);
-        console.log('[ADMIN] ✅ Loaded users from backend:', validUsers.length, 'users');
+        setBackendAvailable(true);
+        console.log('[ADMIN] ✅ Loaded users from MongoDB:', validUsers.length, 'users');
       }
     } catch (error: any) {
-      // Backend not available - use localStorage (offline mode)
-      console.log('[ADMIN] Backend not available, using localStorage (offline mode)');
-      
-      // Load from localStorage
-      const savedUsers = localStorage.getItem('btm_users');
-      const savedTarget = localStorage.getItem('btm_global_target');
-      
-      if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers);
-        const validUsers = parsedUsers.filter((u: any) => u != null && u.id && u.username);
-        setUsers(validUsers);
-        console.log('[ADMIN] ✅ Loaded users from localStorage:', validUsers.length, 'users');
-      } else {
-        // Create default admin user if no users exist
-        const defaultAdmin: UserSettings = {
-          id: 'admin_default',
-          username: 'admin',
-          name: 'Administrator',
-          email: 'admin@btmtravel.net',
-          password: 'admin123',
-          role: 'admin',
-          permissions: [],
-          dailyTarget: 30,
-          createdAt: new Date().toISOString()
-        };
-        setUsers([defaultAdmin]);
-        localStorage.setItem('btm_users', JSON.stringify([defaultAdmin]));
-        console.log('[ADMIN] ✅ Created default admin user in localStorage');
-      }
-      
-      if (savedTarget) {
-        setGlobalTarget(parseInt(savedTarget));
-      }
-      
-      // Don't show error toast - offline mode is expected
+      // Backend not available - show error
+      setBackendAvailable(false);
+      console.error('[ADMIN] ❌ Backend not available - user management requires MongoDB connection');
+      toast.error('⚠️ Backend not available! Click the "Start Backend" button below.');
+      setUsers([]);
     }
   };
 
@@ -186,8 +158,8 @@ export function AdminSettings() {
       await backendService.setGlobalTarget(globalTarget);
       toast.success(`Global daily target set to ${globalTarget} calls (note: targets are now per-user)`);
     } catch (error: any) {
-      // Fallback to localStorage
-      console.log('[ADMIN] Saving target to localStorage (offline mode)');
+      toast.error('Failed to save target. Backend not available.');
+      console.error('[ADMIN] ❌ Failed to save target:', error.message);
       localStorage.setItem('btm_global_target', globalTarget.toString());
       toast.success(`Global daily target set to ${globalTarget} calls (saved locally)`);
     }
@@ -331,7 +303,7 @@ export function AdminSettings() {
       createdAt: new Date().toISOString()
     };
 
-    console.log('[ADMIN] Creating new user:', user.username);
+    console.log('[ADMIN] Creating new user in MongoDB:', user.username);
 
     try {
       const response = await backendService.addUser(user);
@@ -339,17 +311,13 @@ export function AdminSettings() {
       if (response.success) {
         // Reload users from backend to get the latest data
         await loadSettings();
-        toast.success(`User ${newUser.username} created successfully`);
+        toast.success(`✅ User ${newUser.username} created successfully in MongoDB`);
       } else {
         toast.error(response.error || 'Failed to create user');
       }
     } catch (error: any) {
-      // Fallback to localStorage
-      console.log('[ADMIN] Saving user to localStorage (offline mode)');
-      const updatedUsers = [...users, user];
-      setUsers(updatedUsers);
-      localStorage.setItem('btm_users', JSON.stringify(updatedUsers));
-      toast.success(`User ${newUser.username} created successfully (saved locally)`);
+      toast.error('Backend not available. Cannot create users without MongoDB connection.');
+      console.error('[ADMIN] ❌ Failed to create user:', error.message);
     }
 
     setNewUser({
@@ -365,6 +333,8 @@ export function AdminSettings() {
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
+
+    console.log('[ADMIN] Updating user in MongoDB:', editingUser.username);
 
     try {
       const response = await backendService.updateUser(editingUser.id, editingUser);
@@ -410,12 +380,8 @@ export function AdminSettings() {
           toast.error(response.error || 'Failed to delete user');
         }
       } catch (error: any) {
-        // Fallback to localStorage
-        console.log('[ADMIN] Deleting user from localStorage (offline mode)');
-        const updatedUsers = users.filter(u => u.id !== userId);
-        setUsers(updatedUsers);
-        localStorage.setItem('btm_users', JSON.stringify(updatedUsers));
-        toast.success(`User ${user.username} deleted successfully (removed locally)`);
+        toast.error('Backend not available. Cannot delete users without MongoDB connection.');
+        console.error('[ADMIN] ❌ Failed to delete user:', error.message);
       }
     }
   };
@@ -1161,6 +1127,43 @@ export function AdminSettings() {
                   </p>
                 </CardContent>
               </Card>
+
+              {/* Backend Status Alert */}
+              {!backendAvailable && (
+                <Alert className="border-2 border-red-500/50 bg-gradient-to-br from-red-50 to-orange-50">
+                  <Server className="w-5 h-5 text-red-600" />
+                  <AlertDescription className="space-y-4">
+                    <div>
+                      <p className="font-semibold text-red-900 mb-2">⚠️ Backend Server Not Running</p>
+                      <p className="text-sm text-red-800">
+                        User management requires MongoDB backend connection. Please start the backend server to manage users.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1 bg-black/5 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-semibold text-red-900">Windows:</p>
+                        <code className="text-xs bg-black/10 px-2 py-1 rounded block">
+                          START-BACKEND-SIMPLE.bat
+                        </code>
+                      </div>
+                      <div className="flex-1 bg-black/5 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-semibold text-red-900">Mac/Linux:</p>
+                        <code className="text-xs bg-black/10 px-2 py-1 rounded block">
+                          ./START-BACKEND-SIMPLE.sh
+                        </code>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={loadSettings}
+                      variant="outline"
+                      className="w-full border-red-300 bg-white hover:bg-red-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Retry Connection
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* User Management */}
               <Card className="bg-white/60 backdrop-blur-xl border-white/20">

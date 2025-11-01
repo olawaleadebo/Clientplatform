@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Start Backend Server - BTM Travel CRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .error-box {
+            background: #fee;
+            border-left: 4px solid #e53e3e;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .error-box h3 {
+            color: #e53e3e;
+            margin-bottom: 10px;
+        }
+        
+        .error-box code {
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            display: block;
+            margin-top: 10px;
+            color: #e53e3e;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .steps {
+            counter-reset: step-counter;
+        }
+        
+        .step {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+            position: relative;
+        }
+        
+        .step::before {
+            counter-increment: step-counter;
+            content: "STEP " counter(step-counter);
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        
+        .step h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .step p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        
+        .code-box {
+            background: #2d3748;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            position: relative;
+        }
+        
+        .code-box::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -10px;
+            left: 15px;
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 0.7em;
+        }
+        
+        .platform-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        .platform-btn {
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 10px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .platform-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .platform-content {
+            display: none;
+        }
+        
+        .platform-content.active {
+            display: block;
+        }
+        
+        .success-box {
+            background: #c6f6d5;
+            border-left: 4px solid #38a169;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        
+        .success-box h4 {
+            color: #22543d;
+            margin-bottom: 10px;
+        }
+        
+        .success-box ul {
+            margin-left: 20px;
+            color: #22543d;
+        }
+        
+        .warning-box {
+            background: #fef5e7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .warning-box strong {
+            color: #d97706;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            display: block;
+            margin: 30px auto;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.5);
+        }
+        
+        .checklist {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .checklist h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        
+        .checklist-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #667eea;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Start Backend Server</h1>
+        <p class="subtitle">BTM Travel CRM - Quick Setup Guide</p>
+        
+        <div class="error-box">
+            <h3>❌ Current Error</h3>
+            <p>You're seeing this because the backend MongoDB server is not running:</p>
+            <code>[ADMIN] ❌ Backend not available - user management requires MongoDB connection</code>
+        </div>
+        
+        <div class="platform-toggle">
+            <button class="platform-btn active" onclick="showPlatform('windows')">🪟 Windows</button>
+            <button class="platform-btn" onclick="showPlatform('mac')">🍎 Mac/Linux</button>
+        </div>
+        
+        <div id="windows" class="platform-content active">
+            <div class="step">
+                <h3>Open Command Prompt</h3>
+                <p>Press <strong>Win + R</strong>, type <code>cmd</code>, and press Enter</p>
+            </div>
+            
+            <div class="step">
+                <h3>Navigate to Project Folder</h3>
+                <div class="code-box" data-label="Windows CMD">
+cd C:\path\to\your\btm-travel-crm
+                </div>
+                <p style="font-size: 0.9em; color: #718096;">Replace with your actual project path</p>
+            </div>
+            
+            <div class="step">
+                <h3>Run Backend Diagnostic</h3>
+                <div class="code-box" data-label="Windows CMD">
+DIAGNOSE-AND-START-BACKEND.bat
+                </div>
+                <div class="warning-box">
+                    <strong>⚠️ Important:</strong> Keep the Command Prompt window OPEN! Closing it will stop the backend server.
+                </div>
+            </div>
+        </div>
+        
+        <div id="mac" class="platform-content">
+            <div class="step">
+                <h3>Open Terminal</h3>
+                <p>Press <strong>Cmd + Space</strong>, type <code>terminal</code>, and press Enter</p>
+            </div>
+            
+            <div class="step">
+                <h3>Navigate to Project Folder</h3>
+                <div class="code-box" data-label="Mac/Linux Terminal">
+cd /path/to/your/btm-travel-crm
+                </div>
+                <p style="font-size: 0.9em; color: #718096;">Replace with your actual project path</p>
+            </div>
+            
+            <div class="step">
+                <h3>Make Script Executable (First Time Only)</h3>
+                <div class="code-box" data-label="Mac/Linux Terminal">
+chmod +x DIAGNOSE-AND-START-BACKEND.sh
+                </div>
+            </div>
+            
+            <div class="step">
+                <h3>Run Backend Diagnostic</h3>
+                <div class="code-box" data-label="Mac/Linux Terminal">
+./DIAGNOSE-AND-START-BACKEND.sh
+                </div>
+                <div class="warning-box">
+                    <strong>⚠️ Important:</strong> Keep the Terminal window OPEN! Closing it will stop the backend server.
+                </div>
+            </div>
+        </div>
+        
+        <div class="success-box">
+            <h4>✅ Success Indicators</h4>
+            <p>You should see these messages in the terminal:</p>
+            <ul>
+                <li>✅ Deno is installed</li>
+                <li>✅ Port 8000 is available</li>
+                <li>✅ Backend files found</li>
+                <li>✅ Internet connection available</li>
+                <li>🚀 BACKEND SERVER STARTING</li>
+                <li>[MongoDB] ✅ Connected successfully and verified</li>
+                <li>🟢 BTM TRAVEL CRM SERVER - FULLY OPERATIONAL!</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>Final Step: Refresh Your Browser</h3>
+            <p>1. Keep the terminal/command prompt window open</p>
+            <p>2. Go back to your CRM in the browser</p>
+            <p>3. Click the <strong>"Retry Connection"</strong> button in the red alert</p>
+            <p>4. The error should disappear! 🎉</p>
+        </div>
+        
+        <div class="checklist">
+            <h3>✅ Startup Checklist</h3>
+            <div class="checklist-item">
+                <div class="checkbox"></div>
+                <span>Terminal/CMD window is open</span>
+            </div>
+            <div class="checklist-item">
+                <div class="checkbox"></div>
+                <span>Backend server is running (don't close the window!)</span>
+            </div>
+            <div class="checklist-item">
+                <div class="checkbox"></div>
+                <span>See "MongoDB ✅ Connected successfully"</span>
+            </div>
+            <div class="checklist-item">
+                <div class="checkbox"></div>
+                <span>See "Server running on http://localhost:8000"</span>
+            </div>
+            <div class="checklist-item">
+                <div class="checkbox"></div>
+                <span>Browser shows no error in admin panel</span>
+            </div>
+        </div>
+        
+        <button class="btn-primary" onclick="window.close()">✅ Got It! Let's Start</button>
+    </div>
+    
+    <script>
+        function showPlatform(platform) {
+            // Hide all platform content
+            document.querySelectorAll('.platform-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.platform-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected platform
+            document.getElementById(platform).classList.add('active');
+            
+            // Activate button
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

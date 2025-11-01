@@ -57,92 +57,64 @@ export const dataService = {
   // Force check backend availability
   checkBackend: isBackendAvailable,
 
-  // Users & Authentication
+  // Users & Authentication - MongoDB ONLY (Single Source of Truth)
   async login(username: string, password: string) {
     try {
-      return await backendService.login(username, password);
-    } catch {
-      // Fallback to localStorage auth
-      const users = localStorageService.getUsers();
-      const user = users.find((u: any) => 
-        u.username === username && u.password === password && u.isActive
-      );
-      
-      if (user) {
-        localStorageService.setCurrentUser(user);
-        localStorageService.addLoginAudit({
-          userId: user.id,
-          username: user.username,
-          success: true,
-          mode: 'offline',
-        });
-        return {
-          success: true,
-          user: { ...user, password: undefined }, // Don't return password
-          message: 'Login successful (offline mode)',
-        };
-      } else {
-        localStorageService.addLoginAudit({
-          username,
-          success: false,
-          mode: 'offline',
-        });
-        return {
-          success: false,
-          message: 'Invalid credentials',
-        };
-      }
+      const response = await backendService.login(username, password);
+      console.log('[DataService] ✅ Login via MongoDB:', response.success ? 'Success' : 'Failed');
+      return response;
+    } catch (error: any) {
+      console.error('[DataService] ❌ MongoDB backend not available for login');
+      return {
+        success: false,
+        error: 'Backend not available. Please ensure MongoDB server is running.',
+      };
     }
   },
 
   async getUsers() {
-    return withFallback(
-      () => backendService.getUsers(),
-      () => ({ success: true, users: localStorageService.getUsers() }),
-      { silent: true }
-    );
+    try {
+      return await backendService.getUsers();
+    } catch (error: any) {
+      console.error('[DataService] ❌ Failed to get users from MongoDB');
+      return { success: false, error: 'Backend not available', users: [] };
+    }
   },
 
   async getAgents() {
-    return withFallback(
-      () => backendService.getAgents(),
-      () => {
-        const users = localStorageService.getUsers();
-        const agents = users.filter((u: any) => u.role === 'agent' && u.isActive);
-        return { success: true, agents };
-      },
-      { silent: true }
-    );
+    try {
+      return await backendService.getAgents();
+    } catch (error: any) {
+      console.error('[DataService] ❌ Failed to get agents from MongoDB');
+      return { success: false, error: 'Backend not available', agents: [] };
+    }
   },
 
   async addUser(user: any) {
-    return withFallback(
-      () => backendService.addUser(user),
-      () => {
-        const newUser = localStorageService.addUser(user);
-        return { success: true, user: newUser };
-      }
-    );
+    try {
+      return await backendService.addUser(user);
+    } catch (error: any) {
+      console.error('[DataService] ❌ Failed to add user to MongoDB');
+      return { success: false, error: 'Backend not available' };
+    }
   },
 
   async updateUser(userId: string, updates: any) {
-    return withFallback(
-      () => backendService.updateUser(userId, updates),
-      () => {
-        const updated = localStorageService.updateUser(userId, updates);
-        return { success: true, user: updated };
-      }
-    );
+    try {
+      return await backendService.updateUser(userId, updates);
+    } catch (error: any) {
+      console.error('[DataService] ❌ Failed to update user in MongoDB');
+      return { success: false, error: 'Backend not available' };
+    }
   },
 
   async deleteUser(userId: string) {
-    return withFallback(
-      () => backendService.deleteUser(userId),
-      () => {
-        localStorageService.deleteUser(userId);
-        return { success: true };
-      }
-    );
+    try {
+      return await backendService.deleteUser(userId);
+    } catch (error: any) {
+      console.error('[DataService] ❌ Failed to delete user from MongoDB');
+      return { success: false, error: 'Backend not available' };
+    }
   },
 
   // Special Database

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { toast } from 'sonner@2.0.3';
 import { backendService } from '../utils/backendService';
-import { Bug, RefreshCw, Key, User, CheckCircle2, XCircle } from 'lucide-react';
+import { Bug, RefreshCw, Key, User, CheckCircle2, XCircle, Database } from 'lucide-react';
 
 export function UserDebugPanel() {
   const [users, setUsers] = useState<any[]>([]);
@@ -25,12 +25,14 @@ export function UserDebugPanel() {
       
       if (data.success) {
         setUsers(data.users || []);
-        toast.success(`Found ${data.count} users in database`);
+        toast.success(`✅ Found ${data.count} users in MongoDB database`);
       } else {
         toast.error('Failed to fetch users: ' + data.error);
+        setUsers([]);
       }
     } catch (error: any) {
-      toast.error('Error fetching users: ' + error.message);
+      toast.error('❌ MongoDB Error: ' + error.message + ' - Please ensure backend server is running');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -69,58 +71,80 @@ export function UserDebugPanel() {
               <Bug className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <CardTitle>User Debug Panel</CardTitle>
+              <CardTitle>User Database Panel</CardTitle>
               <CardDescription>
-                Debug tool to view all users in MongoDB and test login functionality
+                View all users in MongoDB database and test login functionality
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Fetch Users */}
+          {/* Fetch Users Button */}
           <div>
             <Button 
               onClick={fetchUsers} 
               disabled={loading}
               className="w-full"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Loading...' : 'Fetch All Users from Database'}
+              <Database className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Loading...' : 'Fetch All Users from MongoDB Database'}
             </Button>
           </div>
 
+          <Alert>
+            <AlertDescription>
+              <strong>💡 Single Source of Truth:</strong> All users are stored in MongoDB database only. 
+              No localStorage fallback - this ensures consistency and eliminates confusion.
+            </AlertDescription>
+          </Alert>
+
           {/* Users Table */}
           {users.length > 0 && (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Password</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Created At</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-mono">{user.username}</TableCell>
-                      <TableCell className="font-mono text-xs">{user.password}</TableCell>
-                      <TableCell className="text-sm">{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : user.role === 'manager' ? 'secondary' : 'outline'}>
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleString()}
-                      </TableCell>
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Database className="w-5 h-5 text-blue-500" />
+                <h3 className="text-lg font-semibold">MongoDB Database Users</h3>
+                <Badge variant="default">{users.length} users</Badge>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Password</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Created At</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-mono">{user.username}</TableCell>
+                        <TableCell className="font-mono text-xs">{user.password}</TableCell>
+                        <TableCell className="text-sm">{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={user.role === 'admin' ? 'default' : user.role === 'manager' ? 'secondary' : 'outline'}>
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(user.createdAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
+          )}
+
+          {users.length === 0 && !loading && (
+            <Alert>
+              <AlertDescription>
+                No users loaded yet. Click the button above to fetch users from MongoDB, or ensure your backend server is running.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Test Login */}
@@ -208,8 +232,8 @@ export function UserDebugPanel() {
 
           <Alert>
             <AlertDescription>
-              <strong>⚠️ Important:</strong> This is a debug tool. The backend logs will show detailed information 
-              about user creation and login attempts. Check your backend terminal for detailed debug output.
+              <strong>⚠️ Backend Required:</strong> User management and login require MongoDB backend connection. 
+              Check your backend terminal for detailed debug output.
             </AlertDescription>
           </Alert>
         </CardContent>
