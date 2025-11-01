@@ -1,12 +1,13 @@
 // BTMTravel Manager Portal - Classic View
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Database, Users, Archive, Activity, CheckCircle } from "lucide-react";
+import { Database, Users, Archive, Activity, CheckCircle, Sparkles } from "lucide-react";
 import { DatabaseManager } from "./DatabaseManager";
 import { NumberBankManager } from "./NumberBankManager";
 import { ArchiveManager } from "./ArchiveManager";
 import { AgentMonitoring } from "./AgentMonitoring";
 import { CallCompletionTracker } from "./CallCompletionTracker";
+import { SpecialDatabaseManager } from "./SpecialDatabaseManager";
 
 export function ManagerPortal() {
   const [activeTab, setActiveTab] = useState("agents");
@@ -14,7 +15,7 @@ export function ManagerPortal() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="agents">
             <Activity className="w-4 h-4 mr-2" />
             Agent Monitoring
@@ -30,6 +31,10 @@ export function ManagerPortal() {
           <TabsTrigger value="database">
             <Database className="w-4 h-4 mr-2" />
             Database
+          </TabsTrigger>
+          <TabsTrigger value="special-database">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Special Database
           </TabsTrigger>
           <TabsTrigger value="archive">
             <Archive className="w-4 h-4 mr-2" />
@@ -51,6 +56,10 @@ export function ManagerPortal() {
 
         <TabsContent value="database" className="mt-6">
           <DatabaseManager />
+        </TabsContent>
+
+        <TabsContent value="special-database" className="mt-6">
+          <SpecialDatabaseManager />
         </TabsContent>
 
         <TabsContent value="archive" className="mt-6">

@@ -43,6 +43,8 @@ interface Contact {
   assignedAt?: string;
   createdAt?: string;
   assignmentId?: string; // Reference to the assignment in the database
+  isSpecial?: boolean; // Flag for special database assignments
+  specialPurpose?: string; // Purpose from special database
 }
 
 // No hardcoded contacts - all contacts come from the database
@@ -197,14 +199,16 @@ export function ClientCRM() {
           const contact = {
             ...assignment.numberData,
             id: assignment.id,
-            name: assignment.numberData?.name || assignment.numberData?.company || 'Unknown',
-            phone: assignment.numberData?.phoneNumber || assignment.numberData?.phone || '',
+            name: assignment.numberData?.name || assignment.numberData?.company || assignment.name || 'Unknown',
+            phone: assignment.phoneNumber || assignment.numberData?.phoneNumber || assignment.numberData?.phone || '',
             email: assignment.numberData?.email || '',
             company: assignment.numberData?.company || '',
             businessType: assignment.numberData?.customerType || assignment.numberData?.businessType,
             assignedTo: assignment.agentId,
             assignedAt: assignment.assignedAt,
             assignmentId: assignment.id, // Keep track of assignment ID
+            isSpecial: assignment.type === 'special', // Flag special assignments
+            specialPurpose: assignment.purpose || undefined, // Purpose from special database
           };
           // Always set status to 'pending' for newly loaded assignments (override any existing status from numberData)
           contact.status = 'pending';

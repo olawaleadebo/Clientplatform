@@ -640,4 +640,51 @@ export const backendService = {
       body: JSON.stringify(options || {}),
     });
   },
+
+  // Special Database
+  async getSpecialDatabase() {
+    return backendFetch('/special-database');
+  },
+
+  async uploadToSpecialDatabase(payload: { phoneNumbers: string[], purpose: string, notes?: string }) {
+    return backendFetch('/special-database/upload', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async assignSpecialNumbers(payload: { agentId: string, numberIds: string[] }) {
+    return backendFetch('/special-database/assign', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteSpecialNumber(numberId: string) {
+    return backendFetch(`/special-database/${numberId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getSpecialDatabaseArchive() {
+    return backendFetch('/special-database/archive');
+  },
+
+  async recycleSpecialNumbers(payload: { numberIds: string[] }) {
+    return backendFetch('/special-database/recycle', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async completeSpecialCall(assignmentId: string, callNotes?: string) {
+    return backendFetch('/special-database/complete-call', {
+      method: 'POST',
+      body: JSON.stringify({ assignmentId, callNotes }),
+    });
+  },
+
+  async getAgents() {
+    return backendFetch('/users');
+  },
 };

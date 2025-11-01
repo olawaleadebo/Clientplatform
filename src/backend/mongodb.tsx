@@ -116,6 +116,8 @@ export const Collections = {
   GLOBAL_SETTINGS: 'global_settings',
   NUMBER_CLAIMS: 'number_claims',
   EMAIL_RECIPIENTS: 'email_recipients',
+  SPECIAL_DATABASE: 'special_database',
+  SPECIAL_DATABASE_ARCHIVE: 'special_database_archive',
 } as const;
 
 /**
