@@ -38,7 +38,21 @@ export function SystemInitializer() {
 
   useEffect(() => {
     loadUsers();
+    // Run special assignments migration silently in background
+    migrateSpecialAssignments();
   }, []);
+
+  const migrateSpecialAssignments = async () => {
+    try {
+      const result = await backendService.migrateSpecialAssignments();
+      if (result.success && result.migrated && result.migrated > 0) {
+        console.log(`[MIGRATION] Migrated ${result.migrated} special assignments`);
+      }
+    } catch (error) {
+      // Silently fail - migration is optional
+      console.log('[MIGRATION] Special assignments migration skipped (backend not ready)');
+    }
+  };
 
   const loadUsers = async () => {
     try {

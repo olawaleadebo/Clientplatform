@@ -199,7 +199,7 @@ export const dataService = {
 
   async assignSpecialNumbers(numberIds: string[], agentId: string) {
     return withFallback(
-      () => backendService.assignSpecialNumbers(numberIds, agentId),
+      () => backendService.assignSpecialNumbers({ agentId, numberIds }),
       () => {
         numberIds.forEach(id => {
           localStorageService.updateSpecialNumber(id, {

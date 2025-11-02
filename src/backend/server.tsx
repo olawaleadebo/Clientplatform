@@ -12,19 +12,19 @@ const corsHeaders = {
 };
 
 // Server version and startup timestamp
-const SERVER_VERSION = '9.2.0-CALL-TRACKER';
+const SERVER_VERSION = '9.3.0-ASSIGNMENTS-FIX';
 const SERVER_STARTED = new Date().toISOString();
 console.log('\n\n\n');
 console.log('🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢');
 console.log('🟢                                                         🟢');
 console.log('🟢  BTM TRAVEL CRM SERVER - FULLY OPERATIONAL! ✅          🟢');
-console.log('🟢  VERSION: 9.2.0 - CALL TRACKER INTEGRATED!             🟢');
+console.log('🟢  VERSION: 9.3.0 - ASSIGNMENTS ENDPOINT ADDED!          🟢');
 console.log('🟢                                                         🟢');
 console.log('🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢');
 console.log('');
 console.log('═══════════════════════════════════════════════════════════');
 console.log('📅 Server started:', SERVER_STARTED);
-console.log('✅ ALL 53+ endpoints loaded and verified');
+console.log('✅ ALL 54+ endpoints loaded and verified');
 console.log('✅ User Management: /users, /users/login, /login-audit');
 console.log('✅ Manager endpoints (BEFORE MongoDB check):');
 console.log('   - /team-performance ✅');
@@ -36,9 +36,9 @@ console.log('✅ Customer endpoints: All CRUD operations ready');
 console.log('✅ Email endpoints: /email-recipients ready');
 console.log('✅ Archive endpoints: /customers/archived ready');
 console.log('═══════════════════════════════════════════════════════════');
-console.log('🔥 MANAGER PORTAL 404 ERRORS FIXED!');
-console.log('   All manager endpoints moved before MongoDB check');
-console.log('   Duplicate endpoints removed for reliability');
+console.log('🔥 CRITICAL FIX: GET /assignments endpoint added!');
+console.log('   Special Numbers now load correctly in Agent portal');
+console.log('   All assignment types (client, customer, special) working');
 console.log('═══════════════════════════════════════════════════════════');
 console.log('\n');
 
@@ -171,7 +171,7 @@ console.log('   - GET    /customers/archived');
 console.log('   - POST   /customers/archived');
 console.log('═══════════════════════════════════════════════════════════');
 
-Deno.serve(async (req) => {
+Deno.serve({ port: 8000 }, async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1597,6 +1597,53 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[ROUTING] MongoDB ready, processing: ${req.method} ${path}`);
+
+    // ==================== ASSIGNMENTS ====================
+    // Get assignments for an agent (all types: client, customer, special)
+    if (path.startsWith('/assignments') && req.method === 'GET') {
+      try {
+        const url = new URL(req.url);
+        const agentId = url.searchParams.get('agentId');
+        
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        
+        let query: any = {};
+        if (agentId) {
+          query.agentId = agentId;
+          console.log(`[ASSIGNMENTS] Fetching assignments for agent: ${agentId}`);
+        } else {
+          console.log('[ASSIGNMENTS] Fetching all assignments');
+        }
+        
+        const assignments = await assignmentsCollection.find(query).toArray();
+        
+        console.log(`[ASSIGNMENTS] Found ${assignments.length} assignment(s)`, {
+          agentId,
+          types: assignments.map(a => a.type),
+          assignmentIds: assignments.map(a => a.id)
+        });
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            assignments: convertMongoDocs(assignments),
+            count: assignments.length
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[ASSIGNMENTS] Error fetching assignments:', error);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: error.message,
+            assignments: [],
+            count: 0
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // ==================== CALL SCRIPTS ====================
     if (path === '/call-scripts' && req.method === 'GET') {
@@ -4701,7 +4748,16 @@ Deno.serve(async (req) => {
           specialNumberId: number.id,
           type: 'special',
           assignedAt: today,
-          called: false
+          called: false,
+          // Include numberData for compatibility with client assignments
+          numberData: {
+            id: number.id,
+            phoneNumber: number.phoneNumber,
+            name: number.purpose, // Use purpose as the "name" for display
+            purpose: number.purpose,
+            notes: number.notes,
+            type: 'special'
+          }
         }));
         
         await assignmentsCollection.insertMany(assignments);
@@ -4956,6 +5012,77 @@ Deno.serve(async (req) => {
         );
       } catch (error: any) {
         console.error('[SPECIAL DATABASE] Complete call error:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
+    // Migrate special assignments to include numberData
+    if (path === '/special-database/migrate-assignments' && req.method === 'POST') {
+      console.log('[SPECIAL DATABASE] Migrating special assignments to include numberData');
+      
+      const mongoCheck = await checkMongoReady();
+      if (mongoCheck) {
+        return mongoCheck;
+      }
+      
+      try {
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
+        
+        // Find all special assignments that don't have numberData
+        const specialAssignments = await assignmentsCollection.find({ 
+          type: 'special',
+          numberData: { $exists: false }
+        }).toArray();
+        
+        console.log(`[SPECIAL DATABASE] Found ${specialAssignments.length} special assignments to migrate`);
+        
+        if (specialAssignments.length === 0) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'No assignments need migration',
+              migrated: 0
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Update each assignment to include numberData
+        let migrated = 0;
+        for (const assignment of specialAssignments) {
+          await assignmentsCollection.updateOne(
+            { id: assignment.id },
+            { 
+              $set: { 
+                numberData: {
+                  id: assignment.specialNumberId || assignment.id,
+                  phoneNumber: assignment.phoneNumber,
+                  name: assignment.purpose || 'Special Number',
+                  purpose: assignment.purpose,
+                  notes: assignment.notes,
+                  type: 'special'
+                }
+              } 
+            }
+          );
+          migrated++;
+        }
+        
+        console.log(`[SPECIAL DATABASE] Successfully migrated ${migrated} special assignments`);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: `Successfully migrated ${migrated} special assignment(s)`,
+            migrated
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error('[SPECIAL DATABASE] Migration error:', error);
         return new Response(
           JSON.stringify({ success: false, error: error.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

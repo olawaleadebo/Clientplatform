@@ -684,6 +684,12 @@ export const backendService = {
     });
   },
 
+  async migrateSpecialAssignments() {
+    return backendFetch('/special-database/migrate-assignments', {
+      method: 'POST',
+    });
+  },
+
   async getAgents() {
     return backendFetch('/users');
   },

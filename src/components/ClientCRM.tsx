@@ -190,9 +190,9 @@ export function ClientCRM() {
         // Load assignments from the centralized database
         const data = await backendService.getAssignments(currentUser.id);
         
-        // Convert assignments to contacts (filter out already called)
+        // Convert assignments to contacts (filter out already called and special assignments)
         const activeAssignments = (data.assignments || []).filter(
-          (a: any) => !a.called
+          (a: any) => !a.called && a.type !== 'special'
         );
         
         const userContacts = activeAssignments.map((assignment: any) => {

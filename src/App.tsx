@@ -3,11 +3,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { ClientCRM } from "./components/ClientCRM";
 import { PromoSales } from "./components/PromoSales";
 import { CustomerService } from "./components/CustomerService";
+import { SpecialNumbers } from "./components/SpecialNumbers";
 import { AdminSettings } from "./components/AdminSettings";
 import { ManagerPortal } from "./components/ManagerPortal";
 import { Help } from "./components/Help";
 import { Toaster } from "./components/ui/sonner";
-import { Phone, Tag, HeadphonesIcon, Settings, LogOut, User, BookOpen } from "lucide-react";
+import { Phone, Tag, HeadphonesIcon, Settings, LogOut, User, BookOpen, Star } from "lucide-react";
 import { BTMTravelLogo } from "./components/BTMTravelLogo";
 import { UserProvider, useUser } from "./components/UserContext";
 import { ThreeCXProvider, useThreeCX } from "./components/ThreeCXContext";
@@ -462,7 +463,7 @@ function AppContent() {
       <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-10">
         {/* Agent Classic View - Original Tabs Interface */}
         <Tabs defaultValue="client" className="space-y-6 sm:space-y-8">
-            <TabsList className="grid w-full grid-cols-3 sm:w-[600px] h-12 sm:h-14 p-1 sm:p-1.5 bg-white border-2 border-gray-200 shadow-xl rounded-lg sm:rounded-xl">
+            <TabsList className="grid w-full grid-cols-4 sm:w-[800px] h-12 sm:h-14 p-1 sm:p-1.5 bg-white border-2 border-gray-200 shadow-xl rounded-lg sm:rounded-xl">
               <TabsTrigger 
                 value="client" 
                 className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-violet-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
@@ -474,6 +475,18 @@ function AppContent() {
                 <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Prospective Client</span>
                 <span className="sm:hidden">Prospect</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="special" 
+                className="gap-1 sm:gap-2 rounded-md sm:rounded-lg font-semibold text-xs sm:text-base text-gray-700 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gradient-to-br data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/30 transition-all duration-200 px-2 sm:px-4"
+                style={{
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden'
+                }}
+              >
+                <Star className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Special Numbers</span>
+                <span className="sm:hidden">Special</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="promo" 
@@ -503,6 +516,10 @@ function AppContent() {
 
             <TabsContent value="client" className="space-y-6">
               <ClientCRM />
+            </TabsContent>
+
+            <TabsContent value="special" className="space-y-6">
+              <SpecialNumbers />
             </TabsContent>
 
             <TabsContent value="promo" className="space-y-6">
