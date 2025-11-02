@@ -709,7 +709,7 @@ Deno.serve({ port: 8000 }, async (req) => {
       
       try {
         const usersCollection = await getCollection(Collections.USERS);
-        const clientsCollection = await getCollection(Collections.NUMBERS_DATABASE);
+        const assignmentsCollection = await getCollection(Collections.NUMBER_ASSIGNMENTS);
         const customersCollection = await getCollection(Collections.CUSTOMERS_DATABASE);
         
         const agent = await usersCollection.findOne({ id: agentId });
@@ -720,8 +720,19 @@ Deno.serve({ port: 8000 }, async (req) => {
           );
         }
         
-        // Get all CRM records (clients) assigned to this agent
-        const crmRecords = await clientsCollection.find({ assignedTo: agentId }).toArray();
+        // Get CRM records (type: 'client' assignments)
+        const crmAssignments = await assignmentsCollection.find({ 
+          agentId: agentId,
+          type: 'client'
+        }).toArray();
+        const crmRecords = crmAssignments.map(a => a.numberData || a);
+        
+        // Get Special Numbers records (type: 'special' assignments)
+        const specialAssignments = await assignmentsCollection.find({ 
+          agentId: agentId,
+          type: 'special'
+        }).toArray();
+        const specialRecords = specialAssignments.map(a => a.numberData || a);
         
         // Get all Customer Service records assigned to this agent
         const customerRecords = await customersCollection.find({ assignedTo: agentId }).toArray();
@@ -737,6 +748,7 @@ Deno.serve({ port: 8000 }, async (req) => {
             },
             data: {
               crmRecords: convertMongoDocs(crmRecords),
+              specialRecords: convertMongoDocs(specialRecords),
               customerRecords: convertMongoDocs(customerRecords)
             }
           }),
@@ -1406,10 +1418,25 @@ Deno.serve({ port: 8000 }, async (req) => {
         const agents = await usersCollection.find({ role: 'agent' }).toArray();
         
         const agentStats = await Promise.all(agents.map(async (agent: any) => {
-          // Get CRM assignments
-          const totalCRMAssignments = await assignmentsCollection.countDocuments({ agentId: agent.id });
+          // Get CRM assignments (type: 'client')
+          const totalCRMAssignments = await assignmentsCollection.countDocuments({ 
+            agentId: agent.id,
+            type: 'client'
+          });
           const completedCRMAssignments = await assignmentsCollection.countDocuments({ 
-            agentId: agent.id, 
+            agentId: agent.id,
+            type: 'client',
+            called: true 
+          });
+          
+          // Get Special Numbers assignments (type: 'special')
+          const totalSpecialAssignments = await assignmentsCollection.countDocuments({ 
+            agentId: agent.id,
+            type: 'special'
+          });
+          const completedSpecialAssignments = await assignmentsCollection.countDocuments({ 
+            agentId: agent.id,
+            type: 'special',
             called: true 
           });
           
@@ -1427,8 +1454,8 @@ Deno.serve({ port: 8000 }, async (req) => {
           ).length;
           
           // Calculate totals
-          const overallTotal = totalCRMAssignments + totalCustomerAssignments;
-          const overallCompleted = completedCRMAssignments + completedCustomerAssignments;
+          const overallTotal = totalCRMAssignments + totalSpecialAssignments + totalCustomerAssignments;
+          const overallCompleted = completedCRMAssignments + completedSpecialAssignments + completedCustomerAssignments;
           const overallPending = overallTotal - overallCompleted;
           
           return {
@@ -1439,6 +1466,11 @@ Deno.serve({ port: 8000 }, async (req) => {
               total: totalCRMAssignments,
               completed: completedCRMAssignments,
               pending: totalCRMAssignments - completedCRMAssignments
+            },
+            specialNumbers: {
+              total: totalSpecialAssignments,
+              completed: completedSpecialAssignments,
+              pending: totalSpecialAssignments - completedSpecialAssignments
             },
             customerService: {
               total: totalCustomerAssignments,
@@ -1846,6 +1878,7 @@ Deno.serve({ port: 8000 }, async (req) => {
         numberId: number.id,
         numberData: number,
         agentId,
+        type: 'client', // CRITICAL: Mark as client type for proper categorization
         assignedAt: assignmentDate,
         status: 'active',
         called: false,

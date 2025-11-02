@@ -119,6 +119,7 @@ export const localStorageService = {
 
   // Special Archive
   getSpecialArchive: () => getItem(KEYS.SPECIAL_ARCHIVE, []),
+  getSpecialDatabaseArchive: () => getItem(KEYS.SPECIAL_ARCHIVE, []), // Alias for consistency
   addToSpecialArchive: (archivedNumber: any) => {
     const archive = getItem(KEYS.SPECIAL_ARCHIVE, []);
     archive.push(archivedNumber);

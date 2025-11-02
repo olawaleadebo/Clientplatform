@@ -422,6 +422,39 @@ export const dataService = {
     );
   },
 
+  // Special Database
+  async getSpecialDatabase() {
+    return withFallback(
+      () => backendService.getSpecialDatabase(),
+      () => ({ success: true, numbers: localStorageService.getSpecialDatabase() }),
+      { silent: true }
+    );
+  },
+
+  async getSpecialDatabaseArchive() {
+    return withFallback(
+      () => backendService.getSpecialDatabaseArchive(),
+      () => ({ success: true, archived: localStorageService.getSpecialDatabaseArchive() }),
+      { silent: true }
+    );
+  },
+
+  async assignSpecialNumbers(payload: { agentId: string, numberIds: string[] }) {
+    return backendService.assignSpecialNumbers(payload);
+  },
+
+  async deleteSpecialNumber(numberId: string) {
+    return backendService.deleteSpecialNumber(numberId);
+  },
+
+  async recycleSpecialNumbers(payload: { numberIds: string[] }) {
+    return backendService.recycleSpecialNumbers(payload);
+  },
+
+  async completeSpecialCall(assignmentId: string, callNotes?: string) {
+    return backendService.completeSpecialCall(assignmentId, callNotes);
+  },
+
   // Health check
   async health() {
     try {

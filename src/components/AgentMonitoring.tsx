@@ -22,6 +22,11 @@ interface AgentStats {
     completed: number;
     pending: number;
   };
+  specialNumbers: {
+    total: number;
+    completed: number;
+    pending: number;
+  };
   customerService: {
     total: number;
     completed: number;
@@ -44,6 +49,7 @@ interface AgentData {
   };
   data: {
     crmRecords: any[];
+    specialRecords: any[];
     customerRecords: any[];
   };
 }
@@ -542,13 +548,13 @@ export function AgentMonitoring() {
                           </div>
                         </div>
 
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Stats Grid - 3 Boxes */}
+                        <div className="grid grid-cols-3 gap-3">
                           {/* CRM Stats */}
-                          <div className="space-y-2 p-4 rounded-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 backdrop-blur-sm border border-blue-100/50 hover:shadow-md transition-all duration-300">
-                            <div className="flex items-center gap-2 mb-3">
+                          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/80 backdrop-blur-sm border border-blue-100/50 hover:shadow-md transition-all duration-300">
+                            <div className="flex items-center gap-2 mb-2">
                               <div className="h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 shadow-sm"></div>
-                              <span className="text-blue-700">Client CRM</span>
+                              <span className="text-sm font-semibold text-blue-700">Client CRM</span>
                             </div>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between items-center">
@@ -566,11 +572,33 @@ export function AgentMonitoring() {
                             </div>
                           </div>
 
+                          {/* Special Numbers Stats */}
+                          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-br from-amber-50/80 to-yellow-50/80 backdrop-blur-sm border border-amber-100/50 hover:shadow-md transition-all duration-300">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="h-2 w-2 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 shadow-sm"></div>
+                              <span className="text-sm font-semibold text-amber-700">Special Numbers</span>
+                            </div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between items-center">
+                                <span className="text-amber-600/70">Total:</span>
+                                <span className="text-amber-900 px-2 py-0.5 rounded-md bg-amber-100/50">{agent.specialNumbers?.total || 0}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-amber-600/70">Completed:</span>
+                                <span className="text-green-700 px-2 py-0.5 rounded-md bg-green-100/50">{agent.specialNumbers?.completed || 0}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-amber-600/70">Pending:</span>
+                                <span className="text-orange-700 px-2 py-0.5 rounded-md bg-orange-100/50">{agent.specialNumbers?.pending || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Customer Service Stats */}
-                          <div className="space-y-2 p-4 rounded-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 backdrop-blur-sm border border-purple-100/50 hover:shadow-md transition-all duration-300">
-                            <div className="flex items-center gap-2 mb-3">
+                          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-br from-purple-50/80 to-pink-50/80 backdrop-blur-sm border border-purple-100/50 hover:shadow-md transition-all duration-300">
+                            <div className="flex items-center gap-2 mb-2">
                               <div className="h-2 w-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-sm"></div>
-                              <span className="text-purple-700">Customer Service</span>
+                              <span className="text-sm font-semibold text-purple-700">Customer Service</span>
                             </div>
                             <div className="space-y-1 text-sm">
                               <div className="flex justify-between items-center">
@@ -618,13 +646,20 @@ export function AgentMonitoring() {
 
           {selectedAgent && (
             <Tabs defaultValue="crm" className="w-full flex-1 flex flex-col min-h-0">
-              <TabsList className="grid w-full grid-cols-2 bg-purple-100/50 p-1 flex-shrink-0">
+              <TabsList className="grid w-full grid-cols-3 bg-purple-100/50 p-1 flex-shrink-0">
                 <TabsTrigger 
                   value="crm"
                   className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white transition-all duration-300"
                 >
                   <Phone className="h-4 w-4 mr-2" />
                   Client CRM ({selectedAgent.data?.crmRecords?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="special"
+                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white transition-all duration-300"
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Special Numbers ({selectedAgent.data?.specialRecords?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger 
                   value="customer"
@@ -665,6 +700,62 @@ export function AgentMonitoring() {
                               <TableCell className="min-w-[150px]">{record.phone || record.number || 'N/A'}</TableCell>
                               <TableCell className="min-w-[120px]">
                                 {record.status === 'completed' || record.callCompleted || record.lastContact ? (
+                                  <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 border-0 whitespace-nowrap">
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Completed
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="border border-orange-200 whitespace-nowrap">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Pending
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="min-w-[120px]">
+                                {record.lastContact 
+                                  ? new Date(record.lastContact).toLocaleDateString() 
+                                  : <span className="text-muted-foreground">Never</span>}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="special" className="flex-1 mt-4 min-h-0 overflow-hidden">
+                <div className="h-full rounded-xl border border-amber-100/50 bg-white/60 backdrop-blur-sm overflow-hidden flex flex-col">
+                  {(selectedAgent.data?.specialRecords?.length || 0) === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-yellow-100 mb-4">
+                        <Clock className="h-8 w-8 text-amber-500" />
+                      </div>
+                      <p>No special numbers assigned</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto overflow-y-auto flex-1 max-h-[500px]">
+                      <div className="min-w-[900px]">
+                        <Table>
+                          <TableHeader className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm">
+                            <TableRow className="bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100">
+                              <TableHead className="min-w-[150px]">Name</TableHead>
+                              <TableHead className="min-w-[150px]">Phone</TableHead>
+                              <TableHead className="min-w-[200px]">Notes</TableHead>
+                              <TableHead className="min-w-[120px]">Status</TableHead>
+                              <TableHead className="min-w-[120px]">Last Contact</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                        <TableBody>
+                          {(selectedAgent.data?.specialRecords || []).map((record, index) => (
+                            <TableRow key={record.id || index} className="hover:bg-amber-50/50 transition-colors duration-200">
+                              <TableCell className="min-w-[150px]">{record.name || 'N/A'}</TableCell>
+                              <TableCell className="min-w-[150px]">{record.phone || record.number || 'N/A'}</TableCell>
+                              <TableCell className="min-w-[200px]">{record.notes || 'No notes'}</TableCell>
+                              <TableCell className="min-w-[120px]">
+                                {record.status === 'completed' || record.callCompleted || record.called ? (
                                   <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 border-0 whitespace-nowrap">
                                     <CheckCircle2 className="h-3 w-3 mr-1" />
                                     Completed
