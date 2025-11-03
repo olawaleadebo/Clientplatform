@@ -238,10 +238,10 @@ export function SpecialDatabaseManager() {
     }
 
     try {
-      const result = await dataService.assignSpecialNumbers(
-        numbersToAssign.map(n => n.id),
-        selectedAgent
-      );
+      const result = await dataService.assignSpecialNumbers({
+        agentId: selectedAgent,
+        numberIds: numbersToAssign.map(n => n.id)
+      });
 
       if (result.success) {
         toast.success(`Assigned ${numbersToAssign.length} number(s) to agent`);
@@ -285,9 +285,9 @@ export function SpecialDatabaseManager() {
     }
 
     try {
-      const result = await dataService.recycleSpecialNumbers(
-        numbersToRecycle.map(n => n.id)
-      );
+      const result = await dataService.recycleSpecialNumbers({
+        numberIds: numbersToRecycle.map(n => n.id)
+      });
 
       if (result.success) {
         toast.success(`Recycled ${numbersToRecycle.length} number(s) back to database`);

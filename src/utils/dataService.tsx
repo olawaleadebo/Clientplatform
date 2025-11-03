@@ -197,18 +197,18 @@ export const dataService = {
     );
   },
 
-  async assignSpecialNumbers(numberIds: string[], agentId: string) {
+  async assignSpecialNumbers(payload: { agentId: string, numberIds: string[] }) {
     return withFallback(
-      () => backendService.assignSpecialNumbers({ agentId, numberIds }),
+      () => backendService.assignSpecialNumbers(payload),
       () => {
-        numberIds.forEach(id => {
+        payload.numberIds.forEach(id => {
           localStorageService.updateSpecialNumber(id, {
             status: 'assigned',
-            assignedTo: agentId,
+            assignedTo: payload.agentId,
             assignedAt: new Date().toISOString(),
           });
         });
-        return { success: true, count: numberIds.length };
+        return { success: true, count: payload.numberIds.length };
       }
     );
   },
@@ -226,17 +226,17 @@ export const dataService = {
   async getSpecialDatabaseArchive() {
     return withFallback(
       () => backendService.getSpecialDatabaseArchive(),
-      () => ({ success: true, archived: localStorageService.getSpecialArchive() }),
+      () => ({ success: true, archived: localStorageService.getSpecialDatabaseArchive() }),
       { silent: true }
     );
   },
 
-  async recycleSpecialNumbers(numberIds: string[]) {
+  async recycleSpecialNumbers(payload: { numberIds: string[] }) {
     return withFallback(
-      () => backendService.recycleSpecialNumbers({ numberIds }),
+      () => backendService.recycleSpecialNumbers(payload),
       () => {
-        localStorageService.recycleFromSpecialArchive(numberIds);
-        return { success: true, count: numberIds.length };
+        localStorageService.recycleFromSpecialArchive(payload.numberIds);
+        return { success: true, count: payload.numberIds.length };
       }
     );
   },
