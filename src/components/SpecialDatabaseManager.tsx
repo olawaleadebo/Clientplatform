@@ -101,6 +101,8 @@ export function SpecialDatabaseManager() {
 
   const fetchData = async () => {
     try {
+      setRefreshing(true);
+      
       const [numbersData, archiveData, agentsData] = await Promise.all([
         dataService.getSpecialDatabase(),
         dataService.getSpecialDatabaseArchive(),
@@ -108,11 +110,17 @@ export function SpecialDatabaseManager() {
       ]);
 
       if (numbersData.success) {
+        console.log('[SPECIAL DB] Fetched numbers:', numbersData.numbers?.length || 0);
         setNumbers(numbersData.numbers || []);
+      } else {
+        console.error('[SPECIAL DB] Failed to fetch numbers:', numbersData.error);
       }
       
       if (archiveData.success) {
+        console.log('[SPECIAL DB] Fetched archived:', archiveData.archived?.length || 0);
         setArchivedNumbers(archiveData.archived || []);
+      } else {
+        console.error('[SPECIAL DB] Failed to fetch archive:', archiveData.error);
       }
 
       if (agentsData.success) {
@@ -285,15 +293,23 @@ export function SpecialDatabaseManager() {
     }
 
     try {
+      console.log('[SPECIAL DB] Recycling numbers:', numbersToRecycle.map(n => n.id));
+      
       const result = await dataService.recycleSpecialNumbers({
         numberIds: numbersToRecycle.map(n => n.id)
       });
+
+      console.log('[SPECIAL DB] Recycle result:', result);
 
       if (result.success) {
         toast.success(`Recycled ${numbersToRecycle.length} number(s) back to database`);
         setRecycleDialogOpen(false);
         setNumbersToRecycle([]);
-        fetchData();
+        
+        // Refresh data to show updated statistics
+        console.log('[SPECIAL DB] Refreshing data after recycle...');
+        await fetchData();
+        console.log('[SPECIAL DB] Data refreshed');
       } else {
         toast.error(result.error || 'Failed to recycle numbers');
       }
