@@ -3473,14 +3473,14 @@
     }
   }
 
-  .from-white\/40 {
-    --tw-gradient-from: #fff6;
+  .from-white\/20 {
+    --tw-gradient-from: #fff3;
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .from-white\/40 {
-      --tw-gradient-from: color-mix(in oklab, var(--color-white) 40%, transparent);
+    .from-white\/20 {
+      --tw-gradient-from: color-mix(in oklab, var(--color-white) 20%, transparent);
     }
   }
 

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { motion } from "motion/react";
-import btmLogo from "figma:asset/267e639331ae5b3281b1b8f9c2903af5458190f3.png";
+import { BTMTravelLogo } from "./BTMTravelLogo";
 import { backendService } from "../utils/backendService";
 
 interface LoginProps {
@@ -178,7 +178,7 @@ export function Login({ onBack }: LoginProps = {}) {
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.5, type: "spring" }}
                 >
-                  <img src={btmLogo} alt="BTM Travel Logo" className="w-64 h-auto drop-shadow-2xl" />
+                  <BTMTravelLogo className="w-64 h-auto drop-shadow-2xl" />
                 </motion.div>
               </div>
 

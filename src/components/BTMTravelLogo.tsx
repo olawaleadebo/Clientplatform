@@ -1,11 +1,11 @@
-import logoImage from 'figma:asset/267e639331ae5b3281b1b8f9c2903af5458190f3.png';
+import logoImage from 'figma:asset/da4baf9e9e75fccb7e053a2cc52f5b251f4636a9.png';
 
 export function BTMTravelLogo({ className = "w-10 h-10" }: { className?: string }) {
   return (
     <div className="relative inline-block group">
-      {/* Logo with glass effect overlay */}
-      <img 
-        src={logoImage} 
+      {/* BTM Travel Logo */}
+      <img
+        src={logoImage}
         alt="BTM Travel Logo" 
         className={className}
         style={{ 
@@ -15,7 +15,7 @@ export function BTMTravelLogo({ className = "w-10 h-10" }: { className?: string 
       />
       
       {/* Subtle shine effect on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
     </div>
   );
 }
