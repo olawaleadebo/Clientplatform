@@ -24,7 +24,7 @@ import { useThreeCX } from './ThreeCXContext';
 import { DraggableDialog } from './DraggableDialog';
 import { jsPDF } from 'jspdf';
 import pptxgen from 'pptxgenjs';
-import logoImage from 'figma:asset/267e639331ae5b3281b1b8f9c2903af5458190f3.png';
+import logoImage from 'figma:asset/da4baf9e9e75fccb7e053a2cc52f5b251f4636a9.png';
 
 interface Contact {
   id: string;

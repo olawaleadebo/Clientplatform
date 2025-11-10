@@ -14,12 +14,15 @@ import {
   Users,
   Shield,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  UserPlus,
+  Headphones
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { motion } from "motion/react";
 import { BTMTravelLogo } from "./BTMTravelLogo";
 import { backendService } from "../utils/backendService";
+import { Signup } from "./Signup";
 
 interface LoginProps {
   onBack?: () => void;
@@ -31,7 +34,23 @@ export function Login({ onBack }: LoginProps = {}) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
   const { login } = useUser();
+
+  // Show signup page if requested
+  if (showSignup) {
+    return (
+      <Signup 
+        onBack={() => setShowSignup(false)} 
+        onSignupSuccess={() => {
+          setShowSignup(false);
+          toast.success("Please check your email to verify your account before logging in.", {
+            duration: 8000
+          });
+        }}
+      />
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +274,23 @@ export function Login({ onBack }: LoginProps = {}) {
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                 </Button>
+
+                {/* Signup Link */}
+                <div className="mt-6 text-center">
+                  <p className="text-white/60 text-sm mb-3">Don't have an account?</p>
+                  <Button
+                    type="button"
+                    onClick={() => setShowSignup(true)}
+                    variant="outline"
+                    className="w-full h-12 bg-white/5 border-white/20 text-white hover:bg-white/10 hover:border-white/30 rounded-xl transition-all"
+                  >
+                    <UserPlus className="w-5 h-5 mr-2" />
+                    Register as Agent
+                  </Button>
+                  <p className="text-white/50 text-xs mt-3">
+                    Managers and Admins are added by administrators
+                  </p>
+                </div>
               </form>
             </div>
           </motion.div>
@@ -379,11 +415,39 @@ export function Login({ onBack }: LoginProps = {}) {
                   </div>
                 </motion.div>
 
+                {/* Feature 5 */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.6 }}
+                  className="relative group"
+                >
+                  <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all duration-300">
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="relative flex items-start gap-4">
+                      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3 rounded-xl shadow-lg">
+                        <Headphones className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-bold text-white">
+                            Customer Service Hub
+                          </h3>
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        </div>
+                        <p className="text-white/70 text-sm leading-relaxed">
+                          Unified platform for support tickets, inquiries, and customer success
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+
               {/* Stats */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.6 }}
+                transition={{ duration: 0.6, delay: 0.7 }}
                 className="relative group"
               >
                 <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 hover:bg-white/15 transition-all duration-300">

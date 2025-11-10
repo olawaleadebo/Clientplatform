@@ -128,6 +128,30 @@ export const backendService = {
     });
   },
 
+  // Agent Self-Registration
+  async registerAgent(userData: any) {
+    return backendFetch('/users/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+
+  // Email Verification
+  async verifyEmail(token: string) {
+    return backendFetch('/users/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+
+  // Resend Verification Email
+  async resendVerification(email: string) {
+    return backendFetch('/users/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
   async getUsers() {
     return backendFetch('/users');
   },
